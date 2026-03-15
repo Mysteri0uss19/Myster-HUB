@@ -65,7 +65,7 @@ Tabs.Main:AddToggle("AutoCollectSmartLoop", { Title = "Auto Collect (Zig-Zag)", 
             local plotNum = "2" -- แก้เป็นเลข Plot ของคุณ
             
             local currentPage = 1
-            local maxPages = 14 -- ปรับเป็น 14 ตามที่คุณบอกก่อนหน้านี้
+            local maxPages = 6 -- ปรับเป็น 14 ตามที่คุณบอกก่อนหน้านี้
             local direction = "RightArrow"
             
             while _G.AutoCollect do
