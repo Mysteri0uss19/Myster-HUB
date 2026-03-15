@@ -4,6 +4,21 @@ local SaveManager = loadstring(game:HttpGet(
 local InterfaceManager = loadstring(game:HttpGet(
     "https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua"))()
 
+-------------------------------------------------------------------
+-- [ ระบบ Anti-AFK ]
+-------------------------------------------------------------------
+local Players = game:GetService("Players")
+local player = Players.LocalPlayer
+local VirtualUser = game:GetService("VirtualUser")
+
+-- ทำงานอัตโนมัติเมื่อผู้เล่นนิ่งเกินเวลาที่กำหนด
+player.Idled:Connect(function()
+    VirtualUser:Button2Down(Vector2.zero, workspace.CurrentCamera.CFrame)
+    task.wait(1)
+    VirtualUser:Button2Up(Vector2.zero, workspace.CurrentCamera.CFrame)
+    print("Anti-AFK: Player Successfully UnIdled.")
+end)
+
 local Window = Fluent:CreateWindow({
     Title = "Auto Buy - Smart Market Edition",
     TabWidth = 160,
@@ -39,7 +54,7 @@ local marketList = { "Soul", "Soul-Gold", "Soul-Emerald", "Soul-Void", "Soul-Dia
 -------------------------------------------------------------------
 Tabs.Main:AddParagraph({
     Title = "Farm Management",
-    Content = "ระบบช่วยฟาร์มอัตโนมัติ"
+    Content = "Anti-AFK Status: Active (Always On)"
 })
 
 Tabs.Main:AddToggle("AutoCollectSmartLoop", { Title = "Auto Collect (Zig-Zag)", Default = false }):OnChanged(function(Value)
@@ -50,8 +65,8 @@ Tabs.Main:AddToggle("AutoCollectSmartLoop", { Title = "Auto Collect (Zig-Zag)", 
             local plotNum = "2" -- แก้เป็นเลข Plot ของคุณ
             
             local currentPage = 1
-            local maxPages = 5 -- จำนวนหน้าทั้งหมดของคุณ
-            local direction = "RightArrow" -- เริ่มต้นด้วยการไปขวา
+            local maxPages = 14 -- ปรับเป็น 14 ตามที่คุณบอกก่อนหน้านี้
+            local direction = "RightArrow"
             
             while _G.AutoCollect do
                 local myPlot = workspace.Plots:FindFirstChild(plotNum)
@@ -66,26 +81,24 @@ Tabs.Main:AddToggle("AutoCollectSmartLoop", { Title = "Auto Collect (Zig-Zag)", 
                         end
                     end
                     
-                    -- 2. ระบบสลับทิศทาง
+                    -- 2. ระบบสลับทิศทาง (Zig-Zag)
                     if direction == "RightArrow" then
                         currentPage = currentPage + 1
                         if currentPage >= maxPages then
-                            direction = "LeftArrow" -- ถึงหน้า 14 แล้ว เปลี่ยนเป็นถอยหลัง
+                            direction = "LeftArrow"
                         end
                     else
                         currentPage = currentPage - 1
                         if currentPage <= 1 then
-                            direction = "RightArrow" -- ถึงหน้า 1 แล้ว เปลี่ยนเป็นเดินหน้า
+                            direction = "RightArrow"
                         end
                     end
                     
-                    -- 3. สั่งเปลี่ยนหน้าตามทิศทางปัจจุบัน
+                    -- 3. สั่งเปลี่ยนหน้า
                     remote:FireServer("Page", direction)
-                    
-                    -- รอให้ Object โหลด (0.3 - 0.5 กำลังดีครับ)
-                    task.wait(2) 
+                    task.wait(0.5) -- ปรับเวลารอโหลดให้เร็วขึ้นพอประมาณ
                 else
-                    task.wait(2)
+                    task.wait(1)
                 end
             end
         end)
@@ -96,7 +109,6 @@ end)
 -- [ Tab: Packs (ซองบนราง) ]
 -------------------------------------------------------------------
 local selectedPacks = {}
-
 Tabs.Purchase:AddDropdown("PackSelector", {
     Title = "Select Packs",
     Values = { "Soul", "Pirate", "Ninja", "Slayer", "Sorcerer", "Dragon", "Fire" },
@@ -109,8 +121,7 @@ Tabs.Purchase:AddToggle("AutoBuyPacks", { Title = "Auto Buy Selected Packs", Def
     if Value then
         task.spawn(function()
             while _G.AutoBuy do
-                local allPacks = packsFolder:GetChildren()
-                for _, pack in ipairs(allPacks) do
+                for _, pack in ipairs(packsFolder:GetChildren()) do
                     if not _G.AutoBuy then break end
                     if pack.PrimaryPart and selectedPacks[pack.PrimaryPart.Name] then
                         packRemote:FireServer("BuyPack", pack.Name)
@@ -130,15 +141,11 @@ Tabs.Market:AddToggle("AutoMarketAll", { Title = "Auto Market (Every 10s)", Defa
     _G.AutoMarket = Value
     if Value then
         task.spawn(function()
-            local function buyEverything()
+            while _G.AutoMarket do
                 for _, cardName in ipairs(marketList) do
                     if not _G.AutoMarket then break end
                     marketRemote:FireServer("Buy", cardName)
                 end
-            end
-            
-            while _G.AutoMarket do
-                buyEverything()
                 task.wait(10)
             end
         end)
