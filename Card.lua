@@ -42,35 +42,51 @@ Tabs.Main:AddParagraph({
     Content = "ระบบช่วยฟาร์มอัตโนมัติ"
 })
 
-Tabs.Main:AddToggle("AutoCollectMoney", { Title = "Auto Collect Money (All Pages)", Default = false }):OnChanged(function(Value)
+Tabs.Main:AddToggle("AutoCollectSmartLoop", { Title = "Auto Collect (Zig-Zag)", Default = false }):OnChanged(function(Value)
     _G.AutoCollect = Value
     if Value then
         task.spawn(function()
-            -- ค้นหา Plot ของคุณ (ใช้เลข 2 ตามข้อมูลเดิม)
-            local myPlot = workspace:WaitForChild("Plots"):WaitForChild("2")
-            local display = myPlot:WaitForChild("Map"):WaitForChild("Display")
             local remote = game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("Card")
-
+            local plotNum = "2" -- แก้เป็นเลข Plot ของคุณ
+            
+            local currentPage = 1
+            local maxPages = 14 -- จำนวนหน้าทั้งหมดของคุณ
+            local direction = "RightArrow" -- เริ่มต้นด้วยการไปขวา
+            
             while _G.AutoCollect do
-                -- กวาดทุกด้าน (Left, Right, Middle)
-                for _, side in ipairs(display:GetChildren()) do
-                    if not _G.AutoCollect then break end
+                local myPlot = workspace.Plots:FindFirstChild(plotNum)
+                if myPlot and myPlot:FindFirstChild("Map") and myPlot.Map:FindFirstChild("Display") then
+                    local display = myPlot.Map.Display
                     
-                    -- กวาดทุก Slot ที่อยู่ในด้านนั้นๆ (มันจะพยายามเก็บแม้เราจะไม่ได้เปิดหน้านั้นอยู่)
-                    local slots = side:GetChildren()
-                    for i = 1, #slots do
-                        local cardSlot = slots[i]
-                        
-                        -- ส่ง Remote Collect ไปที่ Object โดยตรง
-                        remote:FireServer("Collect", cardSlot)
-                        
-                        -- ใส่ wait เล็กน้อยเพื่อไม่ให้ Remote ทำงานหนักเกินไปจนโดนเตะ
-                        if i % 10 == 0 then task.wait(0.05) end 
+                    -- 1. กวาดเก็บเงินหน้าปัจจุบัน
+                    for _, side in ipairs(display:GetChildren()) do
+                        for _, cardSlot in ipairs(side:GetChildren()) do
+                            if not _G.AutoCollect then break end
+                            remote:FireServer("Collect", cardSlot)
+                        end
                     end
+                    
+                    -- 2. ระบบสลับทิศทาง
+                    if direction == "RightArrow" then
+                        currentPage = currentPage + 1
+                        if currentPage >= maxPages then
+                            direction = "LeftArrow" -- ถึงหน้า 14 แล้ว เปลี่ยนเป็นถอยหลัง
+                        end
+                    else
+                        currentPage = currentPage - 1
+                        if currentPage <= 1 then
+                            direction = "RightArrow" -- ถึงหน้า 1 แล้ว เปลี่ยนเป็นเดินหน้า
+                        end
+                    end
+                    
+                    -- 3. สั่งเปลี่ยนหน้าตามทิศทางปัจจุบัน
+                    remote:FireServer("Page", direction)
+                    
+                    -- รอให้ Object โหลด (0.3 - 0.5 กำลังดีครับ)
+                    task.wait(0.4) 
+                else
+                    task.wait(1)
                 end
-                
-                -- พัก 1 วินาทีก่อนเริ่มกวาดใหม่รอบถัดไป
-                task.wait(1)
             end
         end)
     end
