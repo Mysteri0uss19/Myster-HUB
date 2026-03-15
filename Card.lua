@@ -34,9 +34,6 @@ local marketList = { "Soul", "Soul-Gold", "Soul-Emerald", "Soul-Void", "Soul-Dia
     "Sorcerer-Diamond", "Sorcerer-Rainbow", "Dragon", "Dragon-Gold", "Dragon-Emerald", "Dragon-Void", "Dragon-Diamond",
     "Dragon-Rainbow", "Fire", "Fire-Gold", "Fire-Emerald", "Fire-Void", "Fire-Diamond", "Fire-Rainbow" }
 
--- ตัวแปรสำหรับเก็บค่า Plot Number
-local plotNumber = "2"
-
 -------------------------------------------------------------------
 -- [ Tab: Auto (ระบบเก็บเงินอัตโนมัติ) ]
 -------------------------------------------------------------------
@@ -45,31 +42,19 @@ Tabs.Main:AddParagraph({
     Content = "ระบบช่วยฟาร์มอัตโนมัติ"
 })
 
--- เพิ่ม Input สำหรับเลือก Plot Number
-Tabs.Main:AddInput("PlotNumberInput", {
-    Title = "Plot Number",
-    Default = "2",
-    Placeholder = "ใส่เลขหมายเลข Plot (1-100)",
-    Numeric = true
-}):OnChanged(function(Value)
-    if Value and Value ~= "" then
-        plotNumber = tostring(Value)
-    end
-end)
-
 Tabs.Main:AddToggle("AutoCollectSmartLoop", { Title = "Auto Collect (Zig-Zag)", Default = false }):OnChanged(function(Value)
     _G.AutoCollect = Value
     if Value then
         task.spawn(function()
             local remote = game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("Card")
+            local plotNum = "2" -- แก้เป็นเลข Plot ของคุณ
             
             local currentPage = 1
-            local maxPages = 14
-            local direction = "RightArrow"
-            local collectCount = 0
+            local maxPages = 5 -- จำนวนหน้าทั้งหมดของคุณ
+            local direction = "RightArrow" -- เริ่มต้นด้วยการไปขวา
             
             while _G.AutoCollect do
-                local myPlot = workspace.Plots:FindFirstChild(plotNumber)
+                local myPlot = workspace.Plots:FindFirstChild(plotNum)
                 if myPlot and myPlot:FindFirstChild("Map") and myPlot.Map:FindFirstChild("Display") then
                     local display = myPlot.Map.Display
                     
@@ -77,10 +62,7 @@ Tabs.Main:AddToggle("AutoCollectSmartLoop", { Title = "Auto Collect (Zig-Zag)", 
                     for _, side in ipairs(display:GetChildren()) do
                         for _, cardSlot in ipairs(side:GetChildren()) do
                             if not _G.AutoCollect then break end
-                            pcall(function()
-                                remote:FireServer("Collect", cardSlot)
-                                collectCount = collectCount + 1
-                            end)
+                            remote:FireServer("Collect", cardSlot)
                         end
                     end
                     
@@ -88,26 +70,24 @@ Tabs.Main:AddToggle("AutoCollectSmartLoop", { Title = "Auto Collect (Zig-Zag)", 
                     if direction == "RightArrow" then
                         currentPage = currentPage + 1
                         if currentPage >= maxPages then
-                            direction = "LeftArrow"
+                            direction = "LeftArrow" -- ถึงหน้า 14 แล้ว เปลี่ยนเป็นถอยหลัง
                         end
                     else
                         currentPage = currentPage - 1
                         if currentPage <= 1 then
-                            direction = "RightArrow"
+                            direction = "RightArrow" -- ถึงหน้า 1 แล้ว เปลี่ยนเป็นเดินหน้า
                         end
                     end
                     
                     -- 3. สั่งเปลี่ยนหน้าตามทิศทางปัจจุบัน
-                    pcall(function()
-                        remote:FireServer("Page", direction)
-                    end)
+                    remote:FireServer("Page", direction)
                     
-                    task.wait(0.4) 
+                    -- รอให้ Object โหลด (0.3 - 0.5 กำลังดีครับ)
+                    task.wait(2) 
                 else
-                    task.wait(1)
+                    task.wait(2)
                 end
             end
-            print("✓ Auto Collect หยุดแล้ว - เก็บทั้งหมด " .. collectCount .. " ใบ")
         end)
     end
 end)
@@ -127,34 +107,18 @@ Tabs.Purchase:AddDropdown("PackSelector", {
 Tabs.Purchase:AddToggle("AutoBuyPacks", { Title = "Auto Buy Selected Packs", Default = false }):OnChanged(function(Value)
     _G.AutoBuy = Value
     if Value then
-        if not next(selectedPacks) then
-            Window:ShowNotification({
-                Title = "⚠️ แจ้งเตือน",
-                Content = "โปรดเลือก Pack ก่อน",
-                Duration = 3
-            })
-            return
-        end
-        
         task.spawn(function()
-            local buyCount = 0
             while _G.AutoBuy do
                 local allPacks = packsFolder:GetChildren()
                 for _, pack in ipairs(allPacks) do
                     if not _G.AutoBuy then break end
-                    
-                    -- แก้: เปรียบเทียบ pack.Name แทน pack.PrimaryPart.Name
-                    if selectedPacks[pack.Name] then
-                        pcall(function()
-                            packRemote:FireServer("BuyPack", pack.Name)
-                            buyCount = buyCount + 1
-                            task.wait(0.2) -- เพิ่ม delay เพื่อหลีกเลี่ยงการโหลดเกินไป
-                        end)
+                    if pack.PrimaryPart and selectedPacks[pack.PrimaryPart.Name] then
+                        packRemote:FireServer("BuyPack", pack.Name)
+                        task.wait(0.1)
                     end
                 end
-                task.wait(0.5)
+                task.wait(0.3)
             end
-            print("✓ Auto Buy Pack หยุดแล้ว - ซื้อทั้งหมด " .. buyCount .. " ครั้ง")
         end)
     end
 end)
@@ -162,32 +126,14 @@ end)
 -------------------------------------------------------------------
 -- [ Tab: Market (วนซื้อทุก 10 วินาที) ]
 -------------------------------------------------------------------
-Tabs.Market:AddSlider("MarketDelaySlider", {
-    Title = "Delay Between Buys (ms)",
-    Min = 50,
-    Max = 1000,
-    Default = 200,
-    Rounding = 50
-}):OnChanged(function(Value)
-    _G.MarketDelay = Value
-end)
-
-_G.MarketDelay = 200
-
 Tabs.Market:AddToggle("AutoMarketAll", { Title = "Auto Market (Every 10s)", Default = false }):OnChanged(function(Value)
     _G.AutoMarket = Value
     if Value then
         task.spawn(function()
-            local buyCount = 0
             local function buyEverything()
                 for _, cardName in ipairs(marketList) do
                     if not _G.AutoMarket then break end
-                    pcall(function()
-                        marketRemote:FireServer("Buy", cardName)
-                        buyCount = buyCount + 1
-                        -- เพิ่ม delay ป้องกัน rate-limit
-                        task.wait(_G.MarketDelay / 1000)
-                    end)
+                    marketRemote:FireServer("Buy", cardName)
                 end
             end
             
@@ -195,7 +141,6 @@ Tabs.Market:AddToggle("AutoMarketAll", { Title = "Auto Market (Every 10s)", Defa
                 buyEverything()
                 task.wait(10)
             end
-            print("✓ Auto Market หยุดแล้ว - ซื้อทั้งหมด " .. buyCount .. " ใบ")
         end)
     end
 end)
