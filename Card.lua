@@ -3,25 +3,18 @@ local SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/d
 local InterfaceManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua"))()
 
 -------------------------------------------------------------------
--- [ ตั้งค่าบริการเบื้องต้น ]
+-- [ ระบบ Anti-AFK อัตโนมัติ (ทำงานทันทีและวนลูปทุก 1 นาที) ]
 -------------------------------------------------------------------
-local Players = game:GetService("Players")
-local player = Players.LocalPlayer
-local VirtualUser = game:GetService("VirtualUser")
-local packRemote = game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("Card")
-local marketRemote = game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("Stock")
-local packsFolder = workspace:WaitForChild("Client"):WaitForChild("Packs")
-
--- เชื่อมต่อ Event AFK ไว้ล่วงหน้า (จะทำงานเมื่อ _G.AntiAFK เป็น true เท่านั้น)
-player.Idled:Connect(function()
-    if _G.AntiAFK then
+task.spawn(function()
+    local VirtualUser = game:GetService("VirtualUser")
+    print("Anti-AFK System: Active (1 Minute Interval)")
+    
+    while true do
+        -- ใช้คำสั่งตามที่คุณระบุ
         VirtualUser:CaptureController()
-        VirtualUser:ClickButton2(Vector2.new(0,0))
-        Fluent:Notify({
-            Title = "Anti-AFK",
-            Content = "ป้องกันการหลุดออกจากเกมเรียบร้อย",
-            Duration = 5
-        })
+        VirtualUser:ClickButton2(Vector2.new())
+        
+        task.wait(180) -- รอทุกๆ 1 นาที
     end
 end)
 
@@ -41,6 +34,13 @@ local Tabs = {
     Settings = Window:AddTab({ Title = "Settings", Icon = "settings" })
 }
 
+-------------------------------------------------------------------
+-- [ ตั้งค่า Remote และตำแหน่ง ]
+-------------------------------------------------------------------
+local packRemote = game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("Card")
+local marketRemote = game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("Stock")
+local packsFolder = workspace:WaitForChild("Client"):WaitForChild("Packs")
+
 local marketList = { "Soul", "Soul-Gold", "Soul-Emerald", "Soul-Void", "Soul-Diamond", "Soul-Rainbow", "Pirate",
     "Pirate-Gold", "Pirate-Emerald", "Pirate-Void", "Pirate-Diamond", "Pirate-Rainbow", "Ninja", "Ninja-Gold",
     "Ninja-Emerald", "Ninja-Void", "Ninja-Diamond", "Ninja-Rainbow", "Slayer", "Slayer-Gold", "Slayer-Emerald",
@@ -49,36 +49,24 @@ local marketList = { "Soul", "Soul-Gold", "Soul-Emerald", "Soul-Void", "Soul-Dia
     "Dragon-Rainbow", "Fire", "Fire-Gold", "Fire-Emerald", "Fire-Void", "Fire-Diamond", "Fire-Rainbow" }
 
 -------------------------------------------------------------------
--- [ Tab: Auto ]
+-- [ Tab: Auto (ไม่มีปุ่ม Anti-AFK แล้ว) ]
 -------------------------------------------------------------------
 Tabs.Main:AddParagraph({
-    Title = "Farm & Security",
-    Content = "จัดการระบบฟาร์มและระบบป้องกันการ AFK"
+    Title = "Farm Management",
 })
 
--- ปุ่ม Toggle Anti-AFK
-Tabs.Main:AddToggle("AntiAFK", { Title = "Enable Anti-AFK", Default = false }):OnChanged(function(Value)
-    _G.AntiAFK = Value
-    if Value then
-        print("Anti-AFK Enabled")
-    else
-        print("Anti-AFK Disabled")
-    end
-end)
-
--- ปุ่ม Toggle Auto Collect เดิม
 Tabs.Main:AddToggle("AutoCollectSmartLoop", { Title = "Auto Collect (Zig-Zag)", Default = false }):OnChanged(function(Value)
     _G.AutoCollect = Value
     if Value then
         task.spawn(function()
             local plotNum = "2" 
             local currentPage = 1
-            local maxPages = 5
+            local maxPages = 6
             local direction = "RightArrow"
             
             while _G.AutoCollect do
                 local myPlot = workspace.Plots:FindFirstChild(plotNum)
-                if myPlot and myPlot:FindFirstChild("Map") and myPlot.Map:FindFirstChild("Display") then
+                if myPlot and myPlot.Map and myPlot.Map.Display then
                     local display = myPlot.Map.Display
                     for _, side in ipairs(display:GetChildren()) do
                         for _, cardSlot in ipairs(side:GetChildren()) do
@@ -106,7 +94,7 @@ Tabs.Main:AddToggle("AutoCollectSmartLoop", { Title = "Auto Collect (Zig-Zag)", 
 end)
 
 -------------------------------------------------------------------
--- [ Tab: Packs & Market คงเดิม ]
+-- [ Tab: Purchase & Market ]
 -------------------------------------------------------------------
 local selectedPacks = {}
 Tabs.Purchase:AddDropdown("PackSelector", { Title = "Select Packs", Values = { "Soul", "Pirate", "Ninja", "Slayer", "Sorcerer", "Dragon", "Fire" }, Multi = true, Default = {}, }):OnChanged(function(Value) selectedPacks = Value end)
