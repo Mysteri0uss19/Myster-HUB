@@ -146,7 +146,7 @@ Tabs.Market:AddToggle("AutoMarketAll", { Title = "Auto Market (Every 10s)", Defa
                     if not _G.AutoMarket then break end
                     marketRemote:FireServer("Buy", cardName)
                 end
-                task.wait(10)
+                task.wait(30)
             end
         end)
     end
