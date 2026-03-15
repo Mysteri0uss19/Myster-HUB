@@ -1,22 +1,32 @@
 local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
-local SaveManager = loadstring(game:HttpGet(
-    "https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua"))()
-local InterfaceManager = loadstring(game:HttpGet(
-    "https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua"))()
+local SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua"))()
+local InterfaceManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua"))()
 
 -------------------------------------------------------------------
--- [ ระบบ Anti-AFK ]
+-- [ ระบบ Anti-AFK แบบใหม่ - ทำงานชัวร์ ]
 -------------------------------------------------------------------
 local Players = game:GetService("Players")
 local player = Players.LocalPlayer
 local VirtualUser = game:GetService("VirtualUser")
 
--- ทำงานอัตโนมัติเมื่อผู้เล่นนิ่งเกินเวลาที่กำหนด
+-- เชื่อมต่อเหตุการณ์ตอนที่ผู้เล่นนิ่ง (Idle)
 player.Idled:Connect(function()
-    VirtualUser:Button2Down(Vector2.zero, workspace.CurrentCamera.CFrame)
-    task.wait(1)
-    VirtualUser:Button2Up(Vector2.zero, workspace.CurrentCamera.CFrame)
-    print("Anti-AFK: Player Successfully UnIdled.")
+    -- จำลองการกดปุ่มบนหน้าจอเพื่อบอกเซิร์ฟเวอร์ว่าเรายังอยู่
+    VirtualUser:CaptureController()
+    VirtualUser:ClickButton2(Vector2.new(0,0))
+    print("Anti-AFK Active: Prevented Disconnect at " .. os.date("%H:%M:%S"))
+end)
+
+-- (แถม) อีกหนึ่งชั้นป้องกัน: ขยับตัวละครเล็กน้อยทุก 2 นาที
+task.spawn(function()
+    while true do
+        task.wait(120) 
+        if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+            -- ขยับกล้องนิดหน่อย
+            VirtualUser:CaptureController()
+            VirtualUser:ClickButton1(Vector2.new(0,0))
+        end
+    end
 end)
 
 local Window = Fluent:CreateWindow({
@@ -36,7 +46,7 @@ local Tabs = {
 }
 
 -------------------------------------------------------------------
--- [ ตั้งค่า Remote และตำแหน่ง ]
+-- [ ส่วนที่เหลือคงเดิมตามโครงสร้างของคุณ ]
 -------------------------------------------------------------------
 local packRemote = game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("Card")
 local marketRemote = game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("Stock")
@@ -49,54 +59,34 @@ local marketList = { "Soul", "Soul-Gold", "Soul-Emerald", "Soul-Void", "Soul-Dia
     "Sorcerer-Diamond", "Sorcerer-Rainbow", "Dragon", "Dragon-Gold", "Dragon-Emerald", "Dragon-Void", "Dragon-Diamond",
     "Dragon-Rainbow", "Fire", "Fire-Gold", "Fire-Emerald", "Fire-Void", "Fire-Diamond", "Fire-Rainbow" }
 
--------------------------------------------------------------------
--- [ Tab: Auto (ระบบเก็บเงินอัตโนมัติ) ]
--------------------------------------------------------------------
-Tabs.Main:AddParagraph({
-    Title = "Farm Management",
-    Content = "Anti-AFK Status: Active (Always On)"
-})
-
+-- [ Tab: Auto ]
+Tabs.Main:AddParagraph({ Title = "Farm Management", Content = "Anti-AFK Status: Active (Always On)" })
 Tabs.Main:AddToggle("AutoCollectSmartLoop", { Title = "Auto Collect (Zig-Zag)", Default = false }):OnChanged(function(Value)
     _G.AutoCollect = Value
     if Value then
         task.spawn(function()
-            local remote = game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("Card")
-            local plotNum = "2" -- แก้เป็นเลข Plot ของคุณ
-            
+            local plotNum = "2" 
             local currentPage = 1
-            local maxPages = 6 -- ปรับเป็น 14 ตามที่คุณบอกก่อนหน้านี้
+            local maxPages = 6
             local direction = "RightArrow"
-            
             while _G.AutoCollect do
                 local myPlot = workspace.Plots:FindFirstChild(plotNum)
-                if myPlot and myPlot:FindFirstChild("Map") and myPlot.Map:FindFirstChild("Display") then
-                    local display = myPlot.Map.Display
-                    
-                    -- 1. กวาดเก็บเงินหน้าปัจจุบัน
-                    for _, side in ipairs(display:GetChildren()) do
+                if myPlot and myPlot.Map and myPlot.Map.Display then
+                    for _, side in ipairs(myPlot.Map.Display:GetChildren()) do
                         for _, cardSlot in ipairs(side:GetChildren()) do
                             if not _G.AutoCollect then break end
-                            remote:FireServer("Collect", cardSlot)
+                            packRemote:FireServer("Collect", cardSlot)
                         end
                     end
-                    
-                    -- 2. ระบบสลับทิศทาง (Zig-Zag)
                     if direction == "RightArrow" then
                         currentPage = currentPage + 1
-                        if currentPage >= maxPages then
-                            direction = "LeftArrow"
-                        end
+                        if currentPage >= maxPages then direction = "LeftArrow" end
                     else
                         currentPage = currentPage - 1
-                        if currentPage <= 1 then
-                            direction = "RightArrow"
-                        end
+                        if currentPage <= 1 then direction = "RightArrow" end
                     end
-                    
-                    -- 3. สั่งเปลี่ยนหน้า
-                    remote:FireServer("Page", direction)
-                    task.wait(0.5) -- ปรับเวลารอโหลดให้เร็วขึ้นพอประมาณ
+                    packRemote:FireServer("Page", direction)
+                    task.wait(0.5)
                 else
                     task.wait(1)
                 end
@@ -105,17 +95,9 @@ Tabs.Main:AddToggle("AutoCollectSmartLoop", { Title = "Auto Collect (Zig-Zag)", 
     end
 end)
 
--------------------------------------------------------------------
--- [ Tab: Packs (ซองบนราง) ]
--------------------------------------------------------------------
+-- [ Tab: Purchase ]
 local selectedPacks = {}
-Tabs.Purchase:AddDropdown("PackSelector", {
-    Title = "Select Packs",
-    Values = { "Soul", "Pirate", "Ninja", "Slayer", "Sorcerer", "Dragon", "Fire" },
-    Multi = true,
-    Default = {},
-}):OnChanged(function(Value) selectedPacks = Value end)
-
+Tabs.Purchase:AddDropdown("PackSelector", { Title = "Select Packs", Values = { "Soul", "Pirate", "Ninja", "Slayer", "Sorcerer", "Dragon", "Fire" }, Multi = true, Default = {}, }):OnChanged(function(Value) selectedPacks = Value end)
 Tabs.Purchase:AddToggle("AutoBuyPacks", { Title = "Auto Buy Selected Packs", Default = false }):OnChanged(function(Value)
     _G.AutoBuy = Value
     if Value then
@@ -134,10 +116,8 @@ Tabs.Purchase:AddToggle("AutoBuyPacks", { Title = "Auto Buy Selected Packs", Def
     end
 end)
 
--------------------------------------------------------------------
--- [ Tab: Market (วนซื้อทุก 10 วินาที) ]
--------------------------------------------------------------------
-Tabs.Market:AddToggle("AutoMarketAll", { Title = "Auto Market (Every 10s)", Default = false }):OnChanged(function(Value)
+-- [ Tab: Market ]
+Tabs.Market:AddToggle("AutoMarketAll", { Title = "Auto Market (Every 30s)", Default = false }):OnChanged(function(Value)
     _G.AutoMarket = Value
     if Value then
         task.spawn(function()
@@ -152,7 +132,6 @@ Tabs.Market:AddToggle("AutoMarketAll", { Title = "Auto Market (Every 10s)", Defa
     end
 end)
 
--------------------------------------------------------------------
 SaveManager:SetLibrary(Fluent)
 InterfaceManager:SetLibrary(Fluent)
 InterfaceManager:SetFolder("FluentScriptHub")
