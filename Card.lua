@@ -3,29 +3,25 @@ local SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/d
 local InterfaceManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua"))()
 
 -------------------------------------------------------------------
--- [ ระบบ Anti-AFK แบบใหม่ - ทำงานชัวร์ ]
+-- [ ตั้งค่าบริการเบื้องต้น ]
 -------------------------------------------------------------------
 local Players = game:GetService("Players")
 local player = Players.LocalPlayer
 local VirtualUser = game:GetService("VirtualUser")
+local packRemote = game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("Card")
+local marketRemote = game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("Stock")
+local packsFolder = workspace:WaitForChild("Client"):WaitForChild("Packs")
 
--- เชื่อมต่อเหตุการณ์ตอนที่ผู้เล่นนิ่ง (Idle)
+-- เชื่อมต่อ Event AFK ไว้ล่วงหน้า (จะทำงานเมื่อ _G.AntiAFK เป็น true เท่านั้น)
 player.Idled:Connect(function()
-    -- จำลองการกดปุ่มบนหน้าจอเพื่อบอกเซิร์ฟเวอร์ว่าเรายังอยู่
-    VirtualUser:CaptureController()
-    VirtualUser:ClickButton2(Vector2.new(0,0))
-    print("Anti-AFK Active: Prevented Disconnect at " .. os.date("%H:%M:%S"))
-end)
-
--- (แถม) อีกหนึ่งชั้นป้องกัน: ขยับตัวละครเล็กน้อยทุก 2 นาที
-task.spawn(function()
-    while true do
-        task.wait(120) 
-        if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-            -- ขยับกล้องนิดหน่อย
-            VirtualUser:CaptureController()
-            VirtualUser:ClickButton1(Vector2.new(0,0))
-        end
+    if _G.AntiAFK then
+        VirtualUser:CaptureController()
+        VirtualUser:ClickButton2(Vector2.new(0,0))
+        Fluent:Notify({
+            Title = "Anti-AFK",
+            Content = "ป้องกันการหลุดออกจากเกมเรียบร้อย",
+            Duration = 5
+        })
     end
 end)
 
@@ -45,13 +41,6 @@ local Tabs = {
     Settings = Window:AddTab({ Title = "Settings", Icon = "settings" })
 }
 
--------------------------------------------------------------------
--- [ ส่วนที่เหลือคงเดิมตามโครงสร้างของคุณ ]
--------------------------------------------------------------------
-local packRemote = game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("Card")
-local marketRemote = game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("Stock")
-local packsFolder = workspace:WaitForChild("Client"):WaitForChild("Packs")
-
 local marketList = { "Soul", "Soul-Gold", "Soul-Emerald", "Soul-Void", "Soul-Diamond", "Soul-Rainbow", "Pirate",
     "Pirate-Gold", "Pirate-Emerald", "Pirate-Void", "Pirate-Diamond", "Pirate-Rainbow", "Ninja", "Ninja-Gold",
     "Ninja-Emerald", "Ninja-Void", "Ninja-Diamond", "Ninja-Rainbow", "Slayer", "Slayer-Gold", "Slayer-Emerald",
@@ -59,25 +48,45 @@ local marketList = { "Soul", "Soul-Gold", "Soul-Emerald", "Soul-Void", "Soul-Dia
     "Sorcerer-Diamond", "Sorcerer-Rainbow", "Dragon", "Dragon-Gold", "Dragon-Emerald", "Dragon-Void", "Dragon-Diamond",
     "Dragon-Rainbow", "Fire", "Fire-Gold", "Fire-Emerald", "Fire-Void", "Fire-Diamond", "Fire-Rainbow" }
 
+-------------------------------------------------------------------
 -- [ Tab: Auto ]
-Tabs.Main:AddParagraph({ Title = "Farm Management", Content = "Anti-AFK Status: Active (Always On)" })
+-------------------------------------------------------------------
+Tabs.Main:AddParagraph({
+    Title = "Farm & Security",
+    Content = "จัดการระบบฟาร์มและระบบป้องกันการ AFK"
+})
+
+-- ปุ่ม Toggle Anti-AFK
+Tabs.Main:AddToggle("AntiAFK", { Title = "Enable Anti-AFK", Default = false }):OnChanged(function(Value)
+    _G.AntiAFK = Value
+    if Value then
+        print("Anti-AFK Enabled")
+    else
+        print("Anti-AFK Disabled")
+    end
+end)
+
+-- ปุ่ม Toggle Auto Collect เดิม
 Tabs.Main:AddToggle("AutoCollectSmartLoop", { Title = "Auto Collect (Zig-Zag)", Default = false }):OnChanged(function(Value)
     _G.AutoCollect = Value
     if Value then
         task.spawn(function()
             local plotNum = "2" 
             local currentPage = 1
-            local maxPages = 6
+            local maxPages = 5
             local direction = "RightArrow"
+            
             while _G.AutoCollect do
                 local myPlot = workspace.Plots:FindFirstChild(plotNum)
-                if myPlot and myPlot.Map and myPlot.Map.Display then
-                    for _, side in ipairs(myPlot.Map.Display:GetChildren()) do
+                if myPlot and myPlot:FindFirstChild("Map") and myPlot.Map:FindFirstChild("Display") then
+                    local display = myPlot.Map.Display
+                    for _, side in ipairs(display:GetChildren()) do
                         for _, cardSlot in ipairs(side:GetChildren()) do
                             if not _G.AutoCollect then break end
                             packRemote:FireServer("Collect", cardSlot)
                         end
                     end
+                    
                     if direction == "RightArrow" then
                         currentPage = currentPage + 1
                         if currentPage >= maxPages then direction = "LeftArrow" end
@@ -85,6 +94,7 @@ Tabs.Main:AddToggle("AutoCollectSmartLoop", { Title = "Auto Collect (Zig-Zag)", 
                         currentPage = currentPage - 1
                         if currentPage <= 1 then direction = "RightArrow" end
                     end
+                    
                     packRemote:FireServer("Page", direction)
                     task.wait(0.5)
                 else
@@ -95,7 +105,9 @@ Tabs.Main:AddToggle("AutoCollectSmartLoop", { Title = "Auto Collect (Zig-Zag)", 
     end
 end)
 
--- [ Tab: Purchase ]
+-------------------------------------------------------------------
+-- [ Tab: Packs & Market คงเดิม ]
+-------------------------------------------------------------------
 local selectedPacks = {}
 Tabs.Purchase:AddDropdown("PackSelector", { Title = "Select Packs", Values = { "Soul", "Pirate", "Ninja", "Slayer", "Sorcerer", "Dragon", "Fire" }, Multi = true, Default = {}, }):OnChanged(function(Value) selectedPacks = Value end)
 Tabs.Purchase:AddToggle("AutoBuyPacks", { Title = "Auto Buy Selected Packs", Default = false }):OnChanged(function(Value)
@@ -116,7 +128,6 @@ Tabs.Purchase:AddToggle("AutoBuyPacks", { Title = "Auto Buy Selected Packs", Def
     end
 end)
 
--- [ Tab: Market ]
 Tabs.Market:AddToggle("AutoMarketAll", { Title = "Auto Market (Every 30s)", Default = false }):OnChanged(function(Value)
     _G.AutoMarket = Value
     if Value then
