@@ -3,18 +3,17 @@ local SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/d
 local InterfaceManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua"))()
 
 -------------------------------------------------------------------
--- [ ระบบ Anti-AFK อัตโนมัติ (ทำงานทันทีและวนลูปทุก 1 นาที) ]
+-- Anti Afk
 -------------------------------------------------------------------
 task.spawn(function()
     local VirtualUser = game:GetService("VirtualUser")
     print("Anti-AFK System: Active (1 Minute Interval)")
     
     while true do
-        -- ใช้คำสั่งตามที่คุณระบุ
         VirtualUser:CaptureController()
         VirtualUser:ClickButton2(Vector2.new())
         
-        task.wait(180) -- รอทุกๆ 1 นาที
+        task.wait(180) 
     end
 end)
 
@@ -49,7 +48,6 @@ local marketList = { "Soul", "Soul-Gold", "Soul-Emerald", "Soul-Void", "Soul-Dia
     "Dragon-Rainbow", "Fire", "Fire-Gold", "Fire-Emerald", "Fire-Void", "Fire-Diamond", "Fire-Rainbow" }
 
 -------------------------------------------------------------------
--- [ Tab: Auto (ไม่มีปุ่ม Anti-AFK แล้ว) ]
 -------------------------------------------------------------------
 Tabs.Main:AddParagraph({
     Title = "Farm Management",
