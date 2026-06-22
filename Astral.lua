@@ -82,7 +82,7 @@ WindUI:AddTheme({
 })
 
 local Window = WindUI:CreateWindow({
-    Title                       = "Anime Astral Simulator — Ghost Hub",
+    Title                       = "Anime Astral Simulator",
     Icon                        = "rbxassetid://110552700896064",
     Author                      = "GhostHub",
     Folder                      = "GhostHub/AAS",
@@ -100,8 +100,8 @@ local Window = WindUI:CreateWindow({
 })
 getgenv().GhostHubAAS_Window = Window
 
-Window:Tag({ Title = "Free",    Icon = "key-square", Color = Color3.fromHex("#0011ff"), Radius = 6 })
-Window:Tag({ Title = "v.1.0.6", Icon = "",           Color = Color3.fromHex("#30ff6a"), Radius = 6 })
+Window:Tag({ Title = "Beta",    Icon = "key-square", Color = Color3.fromHex("#0011ff"), Radius = 6 })
+Window:Tag({ Title = "v.1.0.0", Icon = "",           Color = Color3.fromHex("#30ff6a"), Radius = 6 })
 
 -- ============================================================
 --  SERVICES
@@ -296,10 +296,7 @@ local GamemodeTab = Window:Tab({ Title = "Gamemode", Icon = "gamepad-2" })
 local MiscTab     = Window:Tab({ Title = "Misc",     Icon = "gift"     })
 local SettingTab  = Window:Tab({ Title = "Settings", Icon = "cog"      })
 
-task.spawn(function()
-    task.wait(1)
-    WindUI:Notify({ Title = "Ghost Hub v1.0.6", Content = "Anime Astral Simulator loaded!", Duration = 4 })
-end)
+
 task.defer(function() Window:SetToggleKey(Enum.KeyCode.LeftControl) end)
 
 -- ============================================================
@@ -628,9 +625,9 @@ GamemodeTab:Slider({
 })
 
 GamemodeTab:Toggle({
-    Title    = "Auto Raid (World1)",
+    Title    = "Auto Raid",
     Icon     = "sword",
-    Desc     = "Join -> Kill enemies -> Leave at target Wave -> repeat",
+    Desc     = "",
     Type     = "Checkbox",
     Value    = Options.AutoRaid or false,
     Callback = function(v)
@@ -760,10 +757,10 @@ GamemodeTab:Toggle({
                     fireLeaveRaid()
                     WindUI:Notify({
                         Title   = "Auto Raid",
-                        Content = "Left Raid — waiting 5s before rejoining...",
+                        Content = "Left Raid — waiting 10s before rejoining...",
                         Duration = 5
                     })
-                    task.wait(5)
+                    task.wait(10)
                 end
 
                 releaseActivity("Raid")
