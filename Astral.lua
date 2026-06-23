@@ -258,22 +258,25 @@ end
 -- ============================================================
 --  STATE FLAGS
 -- ============================================================
-local isAutoFarm        = false
-local isAutoTrial       = false
-local isAutoRaid        = false
-local isAutoTitanRaid   = false
-local isAutoGateRaid    = false
-local isAutoSlayer      = false
-local isAutoCenterRaid  = false
+local isAutoFarm          = false
+local isAutoTrial         = false
+local isAutoRaid          = false
+local isAutoTitanRaid     = false
+local isAutoGateRaid      = false
+local isAutoSlayer        = false
+local isAutoCenterRaid    = false
+local isAutoTimelessRaid  = false
+local isAutoCenterTimeless= false
 
 local selectedWorld   = Options.SelectedWorld or "1"
 local selectedEnemies = normalizeMultiValue(Options.SelectedEnemies or {})
 
 -- Cooldown sliders (seconds)
-local cooldownRaid      = Options.CooldownRaid      or 3
-local cooldownTitanRaid = Options.CooldownTitanRaid or 3
-local cooldownGateRaid  = Options.CooldownGateRaid  or 3
-local cooldownSlayer    = Options.CooldownSlayer    or 3
+local cooldownRaid        = Options.CooldownRaid        or 3
+local cooldownTitanRaid   = Options.CooldownTitanRaid   or 3
+local cooldownGateRaid    = Options.CooldownGateRaid    or 3
+local cooldownSlayer      = Options.CooldownSlayer      or 3
+local cooldownTimelessRaid= Options.CooldownTimelessRaid or 3
 
 local currentActivity = nil
 
@@ -478,7 +481,6 @@ GamemodeTab:Toggle({
         task.spawn(function()
             while isAutoTrial and isRunning() do
                 local wait = secondsUntilNextTrial()
-                -- ถ้าเหลือน้อยกว่า 5 วิให้รอรอบหน้า
                 if wait < 5 then wait = wait + 1800 end
 
                 WindUI:Notify({
@@ -495,17 +497,14 @@ GamemodeTab:Toggle({
                 end
                 if not isAutoTrial or not isRunning() then break end
 
-                -- Join
                 joinTrialEasy()
                 WindUI:Notify({ Title = "Auto Trial Easy", Content = "กำลัง Join Trial Easy...", Duration = 3 })
 
-                -- รอ enemy folder
                 local trialEnemyFolder = nil
                 local waited = 0
                 repeat
                     task.wait(1) waited = waited + 1
                     trialEnemyFolder = getTrialEnemyFolder()
-                    -- fallback: scan ทุก arena ที่มี Enemies
                     if not trialEnemyFolder or #trialEnemyFolder:GetChildren() == 0 then
                         local ta = workspace:FindFirstChild("TimeTrialArenas")
                         if ta then
@@ -529,9 +528,7 @@ GamemodeTab:Toggle({
 
                 WindUI:Notify({ Title = "Auto Trial Easy", Content = "กำลัง Farm Trial Easy จนจบ...", Duration = 3 })
 
-                -- Farm วนเรื่อยๆ จนกว่า arena จะหายไป
                 while isAutoTrial and isRunning() do
-                    -- ตรวจว่า trial ยังอยู่ไหม
                     local ta = workspace:FindFirstChild("TimeTrialArenas")
                     local arenaAlive = false
                     if ta then
@@ -542,7 +539,6 @@ GamemodeTab:Toggle({
                     end
                     if not arenaAlive then break end
 
-                    -- อัพเดต folder (กรณีมอนเปลี่ยน wave)
                     if not trialEnemyFolder or not trialEnemyFolder.Parent then
                         if ta then
                             for _, child in ipairs(ta:GetChildren()) do
@@ -587,12 +583,8 @@ GamemodeTab:Section({ Title = "Raid (World1)" })
 
 local RAID_WORLD = "World1"
 
--- Auto Center CFrame สำหรับ Raid World1
 local RAID_CENTER_CFRAME = CFrame.new(
-    -162.493073, 918.471924, 497.476837,
-    -0.390122861, -2.41259102e-08, -0.920762837,
-    -1.01727435e-08, 1, -2.18919478e-08,
-    0.920762837, 8.26135382e-10, -0.390122861
+    -162.573334, 918.527954, 495.046875, 0.291684151, -3.40846142e-08, 0.956514716, 4.22843023e-08, 1, 2.27397994e-08, -0.956514716, 3.3812718e-08, 0.291684151
 )
 
 local function fireJoinRaid()
@@ -618,7 +610,6 @@ local function isInRaid()
     return ok and result
 end
 
--- Cooldown Slider สำหรับ Raid
 GamemodeTab:Slider({
     Title    = "Rejoin Cooldown",
     Icon     = "clock",
@@ -669,13 +660,9 @@ GamemodeTab:Toggle({
                     releaseActivity("Raid") task.wait(5) continue
                 end
 
-
                 while isAutoRaid and isRunning() do
-                    if not isInRaid() then
-                        break
-                    end
+                    if not isInRaid() then break end
 
-                    -- ถ้าเปิด Auto Center ให้วาปไปตรงกลางก่อน จากนั้นไม่ต้องวาปหามอน
                     if isAutoCenterRaid then
                         local hrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
                         if hrp then hrp.CFrame = RAID_CENTER_CFRAME end
@@ -964,6 +951,155 @@ GamemodeTab:Toggle({
             end
             releaseActivity("GateRaid")
         end)
+    end
+})
+
+-- ============================================================
+--  TAB: GAMEMODE — AUTO TIMELESS RAID  (World0)
+-- ============================================================
+GamemodeTab:Divider()
+GamemodeTab:Section({ Title = "Timeless Raid (World0)" })
+
+local TIMELESS_WORLD = "World0"
+
+local TIMELESS_CENTER_CFRAME = CFrame.new(
+    6545.85352, 177.530304, 4915.30615,
+    0.999962986, 2.95401588e-08, 0.00860142801,
+    -2.92066176e-08, 1, -3.89029751e-08,
+    -0.00860142801, 3.86503167e-08, 0.999962986
+)
+
+local function fireJoinTimelessRaid()
+    pcall(function()
+        local remote = RS:WaitForChild("BridgeNet2", 10):WaitForChild("dataRemoteEvent", 10)
+        remote:FireServer({
+            {
+                __BridgeTuplePayload__ = true,
+                Payload = { "Create", TIMELESS_WORLD, n = 2 }
+            },
+            "\149"
+        })
+    end)
+end
+
+local function getTimelessEnemyFolder()
+    local arenas = workspace:FindFirstChild("RaidArenas")
+    if not arenas then return nil end
+    local wf = arenas:FindFirstChild(TIMELESS_WORLD)
+    if not wf then return nil end
+    return wf:FindFirstChild("Enemies")
+end
+
+local function isInTimelessRaid()
+    local ok, result = pcall(function()
+        local gui = player.PlayerGui:FindFirstChild("RaidGui")
+        return gui ~= nil and gui.Enabled == true
+    end)
+    return ok and result
+end
+
+GamemodeTab:Slider({
+    Title    = "Rejoin Cooldown",
+    Icon     = "clock",
+    Desc     = "Time to wait before rejoining Timeless Raid",
+    Value    = { Min = 1, Max = 60, Default = cooldownTimelessRaid },
+    Rounding = 0,
+    Callback = function(v)
+        cooldownTimelessRaid = v
+        Options.CooldownTimelessRaid = v
+        SaveConfig()
+    end
+})
+
+GamemodeTab:Toggle({
+    Title    = "Auto Timeless Raid",
+    Icon     = "sword",
+    Desc     = "Auto join and farm Timeless Raid until completion, then rejoin",
+    Type     = "Checkbox",
+    Value    = Options.AutoTimelessRaid or false,
+    Callback = function(v)
+        isAutoTimelessRaid = v
+        Options.AutoTimelessRaid = v
+        SaveConfig()
+        if not isAutoTimelessRaid then return end
+
+        task.spawn(function()
+            while isAutoTimelessRaid and isRunning() do
+                while not tryAcquireActivity("TimelessRaid") and isAutoTimelessRaid and isRunning() do
+                    task.wait(0.5)
+                end
+                if not isAutoTimelessRaid or not isRunning() then break end
+
+                fireJoinTimelessRaid()
+                WindUI:Notify({ Title = "Auto Timeless Raid", Content = "Joining Timeless Raid: " .. TIMELESS_WORLD .. "...", Duration = 3 })
+
+                local joinWait = 0
+                repeat task.wait(1) joinWait = joinWait + 1 until isInTimelessRaid() or joinWait > 20
+
+                if not isInTimelessRaid() then
+                    WindUI:Notify({ Title = "Auto Timeless Raid", Content = "Failed to join Timeless Raid — retrying...", Duration = 4 })
+                    releaseActivity("TimelessRaid") task.wait(5) continue
+                end
+
+                local timelessEnemyFolder = nil
+                local waited = 0
+                repeat
+                    task.wait(1) waited = waited + 1
+                    timelessEnemyFolder = getTimelessEnemyFolder()
+                until (timelessEnemyFolder and #timelessEnemyFolder:GetChildren() > 0) or waited > 20
+
+                if not timelessEnemyFolder or #timelessEnemyFolder:GetChildren() == 0 then
+                    WindUI:Notify({ Title = "Auto Timeless Raid", Content = "Enemy folder not found — retrying...", Duration = 4 })
+                    releaseActivity("TimelessRaid") task.wait(5) continue
+                end
+
+                WindUI:Notify({ Title = "Auto Timeless Raid", Content = "Farming Timeless Raid until completion...", Duration = 3 })
+
+                while isAutoTimelessRaid and isRunning() do
+                    if not isInTimelessRaid() then
+                        WindUI:Notify({ Title = "Auto Timeless Raid", Content = "Timeless Raid completed — rejoining...", Duration = 4 })
+                        break
+                    end
+
+                    if isAutoCenterTimeless then
+                        local hrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+                        if hrp then hrp.CFrame = TIMELESS_CENTER_CFRAME end
+                        task.wait(0.1)
+                    else
+                        local target = findNearest(timelessEnemyFolder, nil)
+                        if not target then task.wait(0.3) continue end
+                        teleportTo(target)
+                        while isAutoTimelessRaid and isRunning() do
+                            if isEnemyDead(target) then break end
+                            if not isInTimelessRaid() then break end
+                            stayNear(target)
+                            task.wait(0.1)
+                        end
+                        task.wait(0.05)
+                    end
+                end
+
+                releaseActivity("TimelessRaid")
+                if isAutoTimelessRaid and isRunning() then task.wait(cooldownTimelessRaid) end
+            end
+            releaseActivity("TimelessRaid")
+        end)
+    end
+})
+
+GamemodeTab:Toggle({
+    Title    = "Auto Center Timeless Raid",
+    Icon     = "crosshair",
+    Desc     = "Stand at center CFrame instead of chasing enemies",
+    Type     = "Checkbox",
+    Value    = Options.AutoCenterTimeless or false,
+    Callback = function(v)
+        isAutoCenterTimeless = v
+        Options.AutoCenterTimeless = v
+        SaveConfig()
+        if v and not isAutoTimelessRaid then
+            WindUI:Notify({ Title = "Auto Center Timeless Raid", Content = "Please enable Auto Timeless Raid first!", Duration = 4 })
+        end
     end
 })
 
