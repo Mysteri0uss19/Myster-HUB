@@ -635,7 +635,7 @@ GamemodeTab:Slider({
 GamemodeTab:Toggle({
     Title    = "Auto Raid (World1)",
     Icon     = "sword",
-    Desc     = "Auto join และ farm Raid จนจบ แล้ว rejoin",
+    Desc     = "Auto join and farm Raid until completion, then rejoin",
     Type     = "Checkbox",
     Value    = Options.AutoRaid or false,
     Callback = function(v)
