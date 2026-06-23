@@ -101,7 +101,7 @@ local Window = WindUI:CreateWindow({
 getgenv().GhostHubAAS_Window = Window
 
 Window:Tag({ Title = "Free",    Icon = "key-square", Color = Color3.fromHex("#0011ff"), Radius = 6 })
-Window:Tag({ Title = "v.1.0.6", Icon = "",           Color = Color3.fromHex("#30ff6a"), Radius = 6 })
+Window:Tag({ Title = "v.1.0.8", Icon = "",           Color = Color3.fromHex("#30ff6a"), Radius = 6 })
 
 -- ============================================================
 --  SERVICES
@@ -175,7 +175,6 @@ LoadConfig()
 -- ============================================================
 --  HELPERS
 -- ============================================================
-
 local function normalizeMultiValue(v)
     local result = {}
     if type(v) == "table" then
@@ -229,7 +228,6 @@ local function findNearest(enemyFolder, allowSet)
     local myPos = (player.Character
         and player.Character:FindFirstChild("HumanoidRootPart")
         and player.Character.HumanoidRootPart.Position) or Vector3.zero
-
     local bestModel, bestDist = nil, math.huge
     for _, model in ipairs(enemyFolder:GetChildren()) do
         if allowSet and not allowSet[model.Name] then continue end
@@ -237,10 +235,7 @@ local function findNearest(enemyFolder, allowSet)
         local tHRP = model:FindFirstChild("HumanoidRootPart")
         if tHRP then
             local d = (tHRP.Position - myPos).Magnitude
-            if d < bestDist then
-                bestDist  = d
-                bestModel = model
-            end
+            if d < bestDist then bestDist = d bestModel = model end
         end
     end
     return bestModel
@@ -249,9 +244,7 @@ end
 local function teleportTo(model)
     local hrp  = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
     local tHRP = model and model:FindFirstChild("HumanoidRootPart")
-    if hrp and tHRP then
-        hrp.CFrame = tHRP.CFrame * CFrame.new(0, 3, 0)
-    end
+    if hrp and tHRP then hrp.CFrame = tHRP.CFrame * CFrame.new(0, 3, 0) end
 end
 
 local function stayNear(model)
@@ -262,34 +255,27 @@ local function stayNear(model)
     end
 end
 
--- Generic "read Wave X/Y from a Text label" helper, used by every
--- raid/trial type below (each has its own GUI path but same Text format).
-local function readWaveFromLabel(waveLabel)
-    local cur, max = 0, 0
-    pcall(function()
-        if waveLabel then
-            local c, m = waveLabel.Text:match("Wave%s+(%d+)/(%d+)")
-            cur = tonumber(c) or 0
-            max = tonumber(m) or 0
-        end
-    end)
-    return cur, max
-end
-
 -- ============================================================
 --  STATE FLAGS
 -- ============================================================
-local isAutoFarm      = false
-local isAutoTrial     = false
-local isAutoRaid      = false
-local isAutoTitanRaid = false
-local isAutoGateRaid  = false
-local isAutoSlayer    = false
+local isAutoFarm        = false
+local isAutoTrial       = false
+local isAutoRaid        = false
+local isAutoTitanRaid   = false
+local isAutoGateRaid    = false
+local isAutoSlayer      = false
+local isAutoCenterRaid  = false
+
 local selectedWorld   = Options.SelectedWorld or "1"
 local selectedEnemies = normalizeMultiValue(Options.SelectedEnemies or {})
 
+-- Cooldown sliders (seconds)
+local cooldownRaid      = Options.CooldownRaid      or 3
+local cooldownTitanRaid = Options.CooldownTitanRaid or 3
+local cooldownGateRaid  = Options.CooldownGateRaid  or 3
+local cooldownSlayer    = Options.CooldownSlayer    or 3
 
-local currentActivity = nil  
+local currentActivity = nil
 
 local function tryAcquireActivity(name)
     if currentActivity == nil or currentActivity == name then
@@ -300,22 +286,20 @@ local function tryAcquireActivity(name)
 end
 
 local function releaseActivity(name)
-    if currentActivity == name then
-        currentActivity = nil
-    end
+    if currentActivity == name then currentActivity = nil end
 end
 
 -- ============================================================
 --  TABS
 -- ============================================================
-local FarmTab     = Window:Tab({ Title = "Farming",  Icon = "swords"   })
+local FarmTab     = Window:Tab({ Title = "Farming",  Icon = "swords"    })
 local GamemodeTab = Window:Tab({ Title = "Gamemode", Icon = "gamepad-2" })
-local MiscTab     = Window:Tab({ Title = "Misc",     Icon = "gift"     })
-local SettingTab  = Window:Tab({ Title = "Settings", Icon = "cog"      })
+local MiscTab     = Window:Tab({ Title = "Misc",     Icon = "gift"      })
+local SettingTab  = Window:Tab({ Title = "Settings", Icon = "cog"       })
 
 task.spawn(function()
     task.wait(1)
-    WindUI:Notify({ Title = "Ghost Hub v1.0.6", Content = "Anime Astral Simulator loaded!", Duration = 4 })
+    WindUI:Notify({ Title = "Ghost Hub v1.0.8", Content = "Anime Astral Simulator loaded!", Duration = 4 })
 end)
 task.defer(function() Window:SetToggleKey(Enum.KeyCode.LeftControl) end)
 
@@ -383,8 +367,8 @@ FarmTab:Button({
     Callback = function()
         local names = refreshEnemyDropdown()
         WindUI:Notify({
-            Title   = "Refresh",
-            Content = string.format("World %s — found %d enemy types", selectedWorld, #names),
+            Title    = "Refresh",
+            Content  = string.format("World %s — found %d enemy types", selectedWorld, #names),
             Duration = 3
         })
     end
@@ -401,14 +385,9 @@ FarmTab:Toggle({
     Value    = Options.AutoFarm or false,
     Callback = function(v)
         if v and #selectedEnemies == 0 then
-            WindUI:Notify({
-                Title   = "Auto Farm",
-                Content = "Please select at least one enemy in the dropdown first!",
-                Duration = 4
-            })
+            WindUI:Notify({ Title = "Auto Farm", Content = "Please select at least one enemy in the dropdown first!", Duration = 4 })
             return
         end
-
         isAutoFarm = v
         Options.AutoFarm = v
         SaveConfig()
@@ -417,42 +396,24 @@ FarmTab:Toggle({
         task.spawn(function()
             while isAutoFarm and isRunning() do
                 if #selectedEnemies == 0 then
-                    WindUI:Notify({
-                        Title   = "Auto Farm",
-                        Content = "No enemy selected — stopping Auto Farm.",
-                        Duration = 4
-                    })
-                    isAutoFarm = false
-                    Options.AutoFarm = false
-                    SaveConfig()
+                    WindUI:Notify({ Title = "Auto Farm", Content = "No enemy selected — stopping Auto Farm.", Duration = 4 })
+                    isAutoFarm = false Options.AutoFarm = false SaveConfig()
                     break
                 end
-
-                -- Don't move/teleport while Trial or Raid owns the activity lock
-                if not tryAcquireActivity("Farm") then
-                    task.wait(0.5)
-                    continue
-                end
-
+                if not tryAcquireActivity("Farm") then task.wait(0.5) continue end
                 local enemyFolder = getEnemyFolder(selectedWorld)
                 if not enemyFolder then releaseActivity("Farm") task.wait(0.5) continue end
-
                 local allowSet = {}
                 for _, name in ipairs(selectedEnemies) do allowSet[name] = true end
-
                 local target = findNearest(enemyFolder, allowSet)
                 if not target then releaseActivity("Farm") task.wait(0.5) continue end
-
                 teleportTo(target)
-
                 while isAutoFarm and isRunning() do
                     if isEnemyDead(target) then break end
-                    -- another higher-priority activity may steal the lock externally; if so, stop moving
                     if currentActivity ~= "Farm" then break end
                     stayNear(target)
                     task.wait(0.1)
                 end
-
                 releaseActivity("Farm")
                 task.wait(0.05)
             end
@@ -464,16 +425,25 @@ FarmTab:Toggle({
 -- ============================================================
 --  TAB: GAMEMODE — TIME TRIAL EASY
 -- ============================================================
-GamemodeTab:Section({ Title = "Time Trial" })
+GamemodeTab:Section({ Title = "Time Trial Easy" })
 
 local function joinTrialEasy()
     pcall(function()
-        RS:WaitForChild("BridgeNet2", 10):WaitForChild("dataRemoteEvent", 10)
-          :FireServer({ { __BridgeTuplePayload__ = true, Payload = { "Join", "Easy", n = 2 } }, "\207" })
+        local remote = RS:WaitForChild("BridgeNet2", 10):WaitForChild("dataRemoteEvent", 10)
+        local args = {
+            {
+                {
+                    __BridgeTuplePayload__ = true,
+                    Payload = { "Join", "Easy", n = 2 }
+                },
+                "\207"
+            }
+        }
+        remote:FireServer(unpack(args))
     end)
 end
 
-local function leaveTrialEasy()
+local function leaveTrialRemote()
     pcall(function()
         RS:WaitForChild("BridgeNet2", 10):WaitForChild("dataRemoteEvent", 10)
           :FireServer({ { [2] = "\208" } })
@@ -483,9 +453,9 @@ end
 local function getTrialEnemyFolder()
     local ta = workspace:FindFirstChild("TimeTrialArenas")
     if not ta then return nil end
-    local easy = ta:FindFirstChild("Easy")
-    if not easy then return nil end
-    return easy:FindFirstChild("Enemies")
+    local folder = ta:FindFirstChild("Easy")
+    if not folder then return nil end
+    return folder:FindFirstChild("Enemies")
 end
 
 local function secondsUntilNextTrial()
@@ -496,7 +466,7 @@ end
 GamemodeTab:Toggle({
     Title    = "Auto Trial Easy",
     Icon     = "timer",
-    Desc     = "Join Trial Easy every xx:00 / xx:30 and farm enemies in the Arena",
+    Desc     = "Join Trial Easy ทุก xx:00 / xx:30 ",
     Type     = "Checkbox",
     Value    = Options.AutoTrial or false,
     Callback = function(v)
@@ -508,45 +478,88 @@ GamemodeTab:Toggle({
         task.spawn(function()
             while isAutoTrial and isRunning() do
                 local wait = secondsUntilNextTrial()
+                -- ถ้าเหลือน้อยกว่า 5 วิให้รอรอบหน้า
                 if wait < 5 then wait = wait + 1800 end
 
                 WindUI:Notify({
-                    Title   = "Auto Trial Easy",
-                    Content = string.format("Waiting %d min %d sec for next Trial", math.floor((wait-1)/60), (wait-1)%60),
+                    Title    = "Auto Trial Easy",
+                    Content  = string.format("รออีก %d นาที %d วินาที", math.floor((wait-1)/60), (wait-1)%60),
                     Duration = 5
                 })
 
                 task.wait(wait - 3)
                 if not isAutoTrial or not isRunning() then break end
 
-                -- wait until Farm/Raid release the activity lock before joining
                 while not tryAcquireActivity("Trial") and isAutoTrial and isRunning() do
                     task.wait(0.5)
                 end
                 if not isAutoTrial or not isRunning() then break end
 
+                -- Join
                 joinTrialEasy()
-                WindUI:Notify({ Title = "Auto Trial Easy", Content = "Joining Trial Easy...", Duration = 3 })
+                WindUI:Notify({ Title = "Auto Trial Easy", Content = "กำลัง Join Trial Easy...", Duration = 3 })
 
+                -- รอ enemy folder
                 local trialEnemyFolder = nil
                 local waited = 0
                 repeat
                     task.wait(1) waited = waited + 1
                     trialEnemyFolder = getTrialEnemyFolder()
-                until (trialEnemyFolder and #trialEnemyFolder:GetChildren() > 0) or waited > 20
+                    -- fallback: scan ทุก arena ที่มี Enemies
+                    if not trialEnemyFolder or #trialEnemyFolder:GetChildren() == 0 then
+                        local ta = workspace:FindFirstChild("TimeTrialArenas")
+                        if ta then
+                            for _, child in ipairs(ta:GetChildren()) do
+                                local ef = child:FindFirstChild("Enemies")
+                                if ef and #ef:GetChildren() > 0 then
+                                    trialEnemyFolder = ef
+                                    break
+                                end
+                            end
+                        end
+                    end
+                until (trialEnemyFolder and #trialEnemyFolder:GetChildren() > 0) or waited > 25
 
                 if not trialEnemyFolder or #trialEnemyFolder:GetChildren() == 0 then
-                    WindUI:Notify({ Title = "Auto Trial Easy", Content = "No enemies found in Arena — skipping this round", Duration = 4 })
-                    leaveTrialEasy()
+                    WindUI:Notify({ Title = "Auto Trial Easy", Content = "ไม่พบ enemy ใน Arena — ข้ามรอบนี้", Duration = 4 })
+                    leaveTrialRemote()
                     releaseActivity("Trial")
                     continue
                 end
 
-                WindUI:Notify({ Title = "Auto Trial Easy", Content = "Starting to farm Trial Easy!", Duration = 3 })
+                WindUI:Notify({ Title = "Auto Trial Easy", Content = "กำลัง Farm Trial Easy จนจบ...", Duration = 3 })
 
+                -- Farm วนเรื่อยๆ จนกว่า arena จะหายไป
                 while isAutoTrial and isRunning() do
+                    -- ตรวจว่า trial ยังอยู่ไหม
+                    local ta = workspace:FindFirstChild("TimeTrialArenas")
+                    local arenaAlive = false
+                    if ta then
+                        for _, child in ipairs(ta:GetChildren()) do
+                            local ef = child:FindFirstChild("Enemies")
+                            if ef then arenaAlive = true break end
+                        end
+                    end
+                    if not arenaAlive then break end
+
+                    -- อัพเดต folder (กรณีมอนเปลี่ยน wave)
+                    if not trialEnemyFolder or not trialEnemyFolder.Parent then
+                        if ta then
+                            for _, child in ipairs(ta:GetChildren()) do
+                                local ef = child:FindFirstChild("Enemies")
+                                if ef and #ef:GetChildren() > 0 then
+                                    trialEnemyFolder = ef break
+                                end
+                            end
+                        end
+                    end
+
+                    if not trialEnemyFolder then task.wait(0.3) continue end
+
                     local target = findNearest(trialEnemyFolder, nil)
-                    if not target then break end
+                    if not target then
+                        task.wait(0.3) continue
+                    end
                     teleportTo(target)
                     while isAutoTrial and isRunning() do
                         if isEnemyDead(target) then break end
@@ -556,10 +569,9 @@ GamemodeTab:Toggle({
                     task.wait(0.05)
                 end
 
-                leaveTrialEasy()
+                leaveTrialRemote()
                 releaseActivity("Trial")
-
-                WindUI:Notify({ Title = "Auto Trial Easy", Content = "Trial complete! Waiting for next round...", Duration = 5 })
+                WindUI:Notify({ Title = "Auto Trial Easy", Content = "Trial Easy จบแล้ว! รอรอบถัดไป...", Duration = 5 })
                 task.wait(10)
             end
             releaseActivity("Trial")
@@ -568,31 +580,25 @@ GamemodeTab:Toggle({
 })
 
 -- ============================================================
---  TAB: GAMEMODE — NARUTO RAID  (World1 only, fixed)
+--  TAB: GAMEMODE — NARUTO RAID  (World1)
 -- ============================================================
 GamemodeTab:Divider()
-local RAID_WORLD    = "World1"   -- ล็อกใช้แค่ World1 เท่านั้น
-local raidLeaveWave = Options.RaidLeaveWave or 100
+GamemodeTab:Section({ Title = "Raid (World1)" })
+
+local RAID_WORLD = "World1"
+
+-- Auto Center CFrame สำหรับ Raid World1
+local RAID_CENTER_CFRAME = CFrame.new(
+    -162.493073, 918.471924, 497.476837,
+    -0.390122861, -2.41259102e-08, -0.920762837,
+    -1.01727435e-08, 1, -2.18919478e-08,
+    0.920762837, 8.26135382e-10, -0.390122861
+)
 
 local function fireJoinRaid()
     pcall(function()
-        local remote = RS:WaitForChild("BridgeNet2", 10)
-                          :WaitForChild("dataRemoteEvent", 10)
-        remote:FireServer({
-            {
-                __BridgeTuplePayload__ = true,
-                Payload = { "Create", RAID_WORLD, n = 2 }
-            },
-            "\149"
-        })
-    end)
-end
-
-local function fireLeaveRaid()
-    pcall(function()
-        local remote = RS:WaitForChild("BridgeNet2", 10)
-                          :WaitForChild("dataRemoteEvent", 10)
-        remote:FireServer({ { [2] = "\151" } })
+        local remote = RS:WaitForChild("BridgeNet2", 10):WaitForChild("dataRemoteEvent", 10)
+        remote:FireServer({ { __BridgeTuplePayload__ = true, Payload = { "Create", RAID_WORLD, n = 2 } }, "\149" })
     end)
 end
 
@@ -604,17 +610,6 @@ local function getRaidEnemyFolder()
     return wf:FindFirstChild("Enemies")
 end
 
-local function getCurrentWave()
-    local waveLabel = nil
-    pcall(function()
-        local raidGui = player.PlayerGui:FindFirstChild("RaidGui")
-        waveLabel = raidGui
-            and raidGui:FindFirstChild("Main")
-            and raidGui.Main:FindFirstChild("Wave")
-    end)
-    return readWaveFromLabel(waveLabel)
-end
-
 local function isInRaid()
     local ok, result = pcall(function()
         local gui = player.PlayerGui:FindFirstChild("RaidGui")
@@ -623,11 +618,24 @@ local function isInRaid()
     return ok and result
 end
 
-
+-- Cooldown Slider สำหรับ Raid
+GamemodeTab:Slider({
+    Title    = "Rejoin Cooldown",
+    Icon     = "clock",
+    Desc     = "",
+    Value    = { Min = 1, Max = 60, Default = cooldownRaid },
+    Rounding = 0,
+    Callback = function(v)
+        cooldownRaid = v
+        Options.CooldownRaid = v
+        SaveConfig()
+    end
+})
 
 GamemodeTab:Toggle({
     Title    = "Auto Raid (World1)",
     Icon     = "sword",
+    Desc     = "Auto join และ farm Raid จนจบ แล้ว rejoin",
     Type     = "Checkbox",
     Value    = Options.AutoRaid or false,
     Callback = function(v)
@@ -638,165 +646,90 @@ GamemodeTab:Toggle({
 
         task.spawn(function()
             while isAutoRaid and isRunning() do
-
-                while not tryAcquireActivity("Raid") and isAutoRaid and isRunning() do
-                    task.wait(0.5)
-                end
+                while not tryAcquireActivity("Raid") and isAutoRaid and isRunning() do task.wait(0.5) end
                 if not isAutoRaid or not isRunning() then break end
 
                 fireJoinRaid()
-                WindUI:Notify({
-                    Title   = "Auto Raid",
-                    Content = "Joining Raid: " .. RAID_WORLD .. "...",
-                    Duration = 3
-                })
 
                 local joinWait = 0
-                repeat
-                    task.wait(1)
-                    joinWait = joinWait + 1
-                until isInRaid() or joinWait > 20
+                repeat task.wait(1) joinWait = joinWait + 1 until isInRaid() or joinWait > 20
 
                 if not isInRaid() then
-                    WindUI:Notify({
-                        Title   = "Auto Raid",
-                        Content = "Failed to join Raid — retrying...",
-                        Duration = 4
-                    })
-                    releaseActivity("Raid")
-                    task.wait(5)
-                    continue
+                    releaseActivity("Raid") task.wait(5) continue
                 end
 
-                -- ── Step 3: รอ Enemies folder มีมอน ──────────────────
                 local raidEnemyFolder = nil
                 local waited = 0
                 repeat
-                    task.wait(1)
-                    waited = waited + 1
+                    task.wait(1) waited = waited + 1
                     raidEnemyFolder = getRaidEnemyFolder()
                 until (raidEnemyFolder and #raidEnemyFolder:GetChildren() > 0) or waited > 20
 
                 if not raidEnemyFolder or #raidEnemyFolder:GetChildren() == 0 then
-                    WindUI:Notify({
-                        Title   = "Auto Raid",
-                        Content = "Enemy folder not found — leaving & retrying...",
-                        Duration = 4
-                    })
-                    fireLeaveRaid()
-                    releaseActivity("Raid")
-                    task.wait(5)
-                    continue
+                    releaseActivity("Raid") task.wait(5) continue
                 end
 
-                WindUI:Notify({
-                    Title   = "Auto Raid",
-                    Content = string.format("Joined Raid! Will leave at Wave %d", raidLeaveWave),
-                    Duration = 3
-                })
 
-                -- ── Step 4: ฆ่ามอน + ตรวจ Wave ──────────────────────
-                local shouldLeave = false
-
-                while isAutoRaid and isRunning() and not shouldLeave do
-
-                    local curWave, maxWave = getCurrentWave()
-                    if curWave >= raidLeaveWave then
-                        WindUI:Notify({
-                            Title   = "Auto Raid",
-                            Content = string.format("Wave %d/%d — Leaving now!", curWave, maxWave),
-                            Duration = 4
-                        })
-                        shouldLeave = true
-                        break
-                    end
-
+                while isAutoRaid and isRunning() do
                     if not isInRaid() then
-                        WindUI:Notify({
-                            Title   = "Auto Raid",
-                            Content = "Left Raid (by server) — rejoining...",
-                            Duration = 4
-                        })
                         break
                     end
 
-                    local target = findNearest(raidEnemyFolder, nil)
-                    if not target then
-                        task.wait(0.3)
-                        continue
-                    end
-
-                    teleportTo(target)
-
-                    while isAutoRaid and isRunning() do
-                        if isEnemyDead(target) then break end
-
-                        local cw = getCurrentWave()
-                        if cw >= raidLeaveWave then
-                            shouldLeave = true
-                            break
-                        end
-
-                        if not isInRaid() then
-                            shouldLeave = false
-                            break
-                        end
-
-                        stayNear(target)
+                    -- ถ้าเปิด Auto Center ให้วาปไปตรงกลางก่อน จากนั้นไม่ต้องวาปหามอน
+                    if isAutoCenterRaid then
+                        local hrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+                        if hrp then hrp.CFrame = RAID_CENTER_CFRAME end
                         task.wait(0.1)
+                    else
+                        local target = findNearest(raidEnemyFolder, nil)
+                        if not target then task.wait(0.3) continue end
+                        teleportTo(target)
+                        while isAutoRaid and isRunning() do
+                            if isEnemyDead(target) then break end
+                            if not isInRaid() then break end
+                            stayNear(target)
+                            task.wait(0.1)
+                        end
+                        task.wait(0.05)
                     end
-
-                    task.wait(0.05)
-                end
-
-                -- ── Step 5: Leave ถ้าถึง wave ───────────────────────
-                if shouldLeave then
-                    fireLeaveRaid()
-                    WindUI:Notify({
-                        Title   = "Auto Raid",
-                        Content = "Left Raid — waiting 5s before rejoining...",
-                        Duration = 5
-                    })
-                    task.wait(5)
                 end
 
                 releaseActivity("Raid")
-
-                if isAutoRaid and isRunning() then
-                    task.wait(3)
-                end
+                if isAutoRaid and isRunning() then task.wait(cooldownRaid) end
             end
             releaseActivity("Raid")
         end)
     end
 })
 
--- ============================================================
---  TAB: GAMEMODE — AUTO TITAN RAID  (World4, DefenseArenas, fixed)
--- ============================================================
+GamemodeTab:Toggle({
+    Title    = "Auto Center Raid (World1)",
+    Icon     = "crosshair",
+    Desc     = "Stand in center",
+    Type     = "Checkbox",
+    Value    = Options.AutoCenterRaid or false,
+    Callback = function(v)
+        isAutoCenterRaid = v
+        Options.AutoCenterRaid = v
+        SaveConfig()
+        if v and not isAutoRaid then
+            WindUI:Notify({ Title = "Auto Center Raid", Content = "Please enable Auto Raid (World1) first!", Duration = 4 })
+        end
+    end
+})
 
-local TITAN_WORLD         = "World4"
-local titanRaidLeaveWave  = Options.TitanRaidLeaveWave or 100
+-- ============================================================
+--  TAB: GAMEMODE — AUTO TITAN RAID  (World4)
+-- ============================================================
+GamemodeTab:Divider()
+GamemodeTab:Section({ Title = "Titan Raid (World4)" })
+
+local TITAN_WORLD = "World4"
 
 local function fireJoinTitanRaid()
     pcall(function()
-        local remote = RS:WaitForChild("BridgeNet2", 10)
-                          :WaitForChild("dataRemoteEvent", 10)
-        remote:FireServer({
-            {
-                __BridgeTuplePayload__ = true,
-                Payload = { "Create", TITAN_WORLD, n = 2 }
-            },
-            "+"
-        })
-    end)
-end
-
-local function fireLeaveTitanRaid()
-    pcall(function()
-        local remote = RS:WaitForChild("BridgeNet2", 10)
-                          :WaitForChild("dataRemoteEvent", 10)
-        remote:FireServer({ { [2] = "," } })
+        local remote = RS:WaitForChild("BridgeNet2", 10):WaitForChild("dataRemoteEvent", 10)
+        remote:FireServer({ { __BridgeTuplePayload__ = true, Payload = { "Create", TITAN_WORLD, n = 2 } }, "+" })
     end)
 end
 
@@ -808,18 +741,6 @@ local function getTitanEnemyFolder()
     return wf:FindFirstChild("Enemies")
 end
 
--- Titan Raid uses PlayerGui.DefenseGui.Main.Wave (per Explorer screenshot)
-local function getTitanCurrentWave()
-    local waveLabel = nil
-    pcall(function()
-        local gui = player.PlayerGui:FindFirstChild("DefenseGui")
-        waveLabel = gui
-            and gui:FindFirstChild("Main")
-            and gui.Main:FindFirstChild("Wave")
-    end)
-    return readWaveFromLabel(waveLabel)
-end
-
 local function isInTitanRaid()
     local ok, result = pcall(function()
         local gui = player.PlayerGui:FindFirstChild("DefenseGui")
@@ -828,11 +749,23 @@ local function isInTitanRaid()
     return ok and result
 end
 
-
+GamemodeTab:Slider({
+    Title    = "Rejoin Cooldown",
+    Icon     = "clock",
+    Desc     = "Time to wait before rejoining Titan Raid",
+    Value    = { Min = 1, Max = 60, Default = cooldownTitanRaid },
+    Rounding = 0,
+    Callback = function(v)
+        cooldownTitanRaid = v
+        Options.CooldownTitanRaid = v
+        SaveConfig()
+    end
+})
 
 GamemodeTab:Toggle({
     Title    = "Auto Titan Raid (World4)",
     Icon     = "sword",
+    Desc     = "Auto join and farm Titan Raid until completion, then rejoin",
     Type     = "Checkbox",
     Value    = Options.AutoTitanRaid or false,
     Callback = function(v)
@@ -843,130 +776,52 @@ GamemodeTab:Toggle({
 
         task.spawn(function()
             while isAutoTitanRaid and isRunning() do
-
-                while not tryAcquireActivity("TitanRaid") and isAutoTitanRaid and isRunning() do
-                    task.wait(0.5)
-                end
+                while not tryAcquireActivity("TitanRaid") and isAutoTitanRaid and isRunning() do task.wait(0.5) end
                 if not isAutoTitanRaid or not isRunning() then break end
 
                 fireJoinTitanRaid()
-                WindUI:Notify({
-                    Title   = "Auto Titan Raid",
-                    Content = "Joining Titan Raid: " .. TITAN_WORLD .. "...",
-                    Duration = 3
-                })
+                WindUI:Notify({ Title = "Auto Titan Raid", Content = "Joining Titan Raid: " .. TITAN_WORLD .. "...", Duration = 3 })
 
                 local joinWait = 0
-                repeat
-                    task.wait(1)
-                    joinWait = joinWait + 1
-                until isInTitanRaid() or joinWait > 20
+                repeat task.wait(1) joinWait = joinWait + 1 until isInTitanRaid() or joinWait > 20
 
                 if not isInTitanRaid() then
-                    WindUI:Notify({
-                        Title   = "Auto Titan Raid",
-                        Content = "Failed to join Titan Raid — retrying...",
-                        Duration = 4
-                    })
-                    releaseActivity("TitanRaid")
-                    task.wait(5)
-                    continue
+                    WindUI:Notify({ Title = "Auto Titan Raid", Content = "Failed to join Titan Raid — retrying...", Duration = 4 })
+                    releaseActivity("TitanRaid") task.wait(5) continue
                 end
 
                 local titanEnemyFolder = nil
                 local waited = 0
                 repeat
-                    task.wait(1)
-                    waited = waited + 1
+                    task.wait(1) waited = waited + 1
                     titanEnemyFolder = getTitanEnemyFolder()
                 until (titanEnemyFolder and #titanEnemyFolder:GetChildren() > 0) or waited > 20
 
                 if not titanEnemyFolder or #titanEnemyFolder:GetChildren() == 0 then
-                    WindUI:Notify({
-                        Title   = "Auto Titan Raid",
-                        Content = "Enemy folder not found — leaving & retrying...",
-                        Duration = 4
-                    })
-                    fireLeaveTitanRaid()
-                    releaseActivity("TitanRaid")
-                    task.wait(5)
-                    continue
+                    releaseActivity("TitanRaid") task.wait(5) continue
                 end
 
-                WindUI:Notify({
-                    Title   = "Auto Titan Raid",
-                    Content = string.format("Joined Titan Raid! Will leave at Wave %d", titanRaidLeaveWave),
-                    Duration = 3
-                })
+                WindUI:Notify({ Title = "Auto Titan Raid", Content = "Farming Titan Raid until completion...", Duration = 3 })
 
-                local shouldLeave = false
-
-                while isAutoTitanRaid and isRunning() and not shouldLeave do
-
-                    local curWave, maxWave = getTitanCurrentWave()
-                    if curWave >= titanRaidLeaveWave then
-                        WindUI:Notify({
-                            Title   = "Auto Titan Raid",
-                            Content = string.format("Wave %d/%d — Leaving now!", curWave, maxWave),
-                            Duration = 4
-                        })
-                        shouldLeave = true
-                        break
-                    end
-
+                while isAutoTitanRaid and isRunning() do
                     if not isInTitanRaid() then
-                        WindUI:Notify({
-                            Title   = "Auto Titan Raid",
-                            Content = "Left Titan Raid (by server) — rejoining...",
-                            Duration = 4
-                        })
+                        WindUI:Notify({ Title = "Auto Titan Raid", Content = "Titan Raid completed — rejoining...", Duration = 4 })
                         break
                     end
-
                     local target = findNearest(titanEnemyFolder, nil)
-                    if not target then
-                        task.wait(0.3)
-                        continue
-                    end
-
+                    if not target then task.wait(0.3) continue end
                     teleportTo(target)
-
                     while isAutoTitanRaid and isRunning() do
                         if isEnemyDead(target) then break end
-
-                        local cw = getTitanCurrentWave()
-                        if cw >= titanRaidLeaveWave then
-                            shouldLeave = true
-                            break
-                        end
-
-                        if not isInTitanRaid() then
-                            shouldLeave = false
-                            break
-                        end
-
+                        if not isInTitanRaid() then break end
                         stayNear(target)
                         task.wait(0.1)
                     end
-
                     task.wait(0.05)
                 end
 
-                if shouldLeave then
-                    fireLeaveTitanRaid()
-                    WindUI:Notify({
-                        Title   = "Auto Titan Raid",
-                        Content = "Left Titan Raid — waiting 5s before rejoining...",
-                        Duration = 5
-                    })
-                    task.wait(5)
-                end
-
                 releaseActivity("TitanRaid")
-
-                if isAutoTitanRaid and isRunning() then
-                    task.wait(3)
-                end
+                if isAutoTitanRaid and isRunning() then task.wait(cooldownTitanRaid) end
             end
             releaseActivity("TitanRaid")
         end)
@@ -974,11 +829,12 @@ GamemodeTab:Toggle({
 })
 
 -- ============================================================
---  TAB: GAMEMODE — AUTO GATE RAID  (World5, gate teleport + RaidArenas)
+--  TAB: GAMEMODE — AUTO GATE RAID  (World5)
 -- ============================================================
+GamemodeTab:Divider()
+GamemodeTab:Section({ Title = "Gate Raid (World5)" })
 
-local GATE_WORLD        = "5"
-local gateRaidLeaveWave = Options.GateRaidLeaveWave or 100
+local GATE_WORLD = "5"
 
 local function getActiveGateModel()
     local worlds = workspace:FindFirstChild("Worlds")
@@ -992,29 +848,15 @@ local function getActiveGateModel()
     return raidStation:FindFirstChild("ActiveGate")
 end
 
--- Walking into the ActiveGate model triggers the join server-side,
--- so "joining" here just means teleporting onto the gate.
 local function teleportToGate()
     local hrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
     if not hrp then return false end
-
     local gate = getActiveGateModel()
     if not gate then return false end
-
-    -- ActiveGate may be a model (use a part inside it) or a single part
     local gatePart = gate:IsA("BasePart") and gate or gate:FindFirstChildWhichIsA("BasePart", true)
     if not gatePart then return false end
-
     hrp.CFrame = gatePart.CFrame * CFrame.new(0, 3, 0)
     return true
-end
-
-local function fireLeaveGateRaid()
-    pcall(function()
-        local remote = RS:WaitForChild("BridgeNet2", 10)
-                          :WaitForChild("dataRemoteEvent", 10)
-        remote:FireServer({ { [2] = "\151" } })
-    end)
 end
 
 local function getGateRaidEnemyFolder()
@@ -1025,18 +867,6 @@ local function getGateRaidEnemyFolder()
     return wf:FindFirstChild("Enemies")
 end
 
--- Same RaidGui.Main.Wave pattern as the World1 raid
-local function getGateCurrentWave()
-    local waveLabel = nil
-    pcall(function()
-        local raidGui = player.PlayerGui:FindFirstChild("RaidGui")
-        waveLabel = raidGui
-            and raidGui:FindFirstChild("Main")
-            and raidGui.Main:FindFirstChild("Wave")
-    end)
-    return readWaveFromLabel(waveLabel)
-end
-
 local function isInGateRaid()
     local ok, result = pcall(function()
         local gui = player.PlayerGui:FindFirstChild("RaidGui")
@@ -1045,10 +875,23 @@ local function isInGateRaid()
     return ok and result
 end
 
+GamemodeTab:Slider({
+    Title    = "Rejoin Cooldown",
+    Icon     = "clock",
+    Desc     = "Time to wait before rejoining Gate Raid",
+    Value    = { Min = 1, Max = 600, Default = cooldownGateRaid },
+    Rounding = 0,
+    Callback = function(v)
+        cooldownGateRaid = v
+        Options.CooldownGateRaid = v
+        SaveConfig()
+    end
+})
 
 GamemodeTab:Toggle({
     Title    = "Auto Gate Raid (World5)",
     Icon     = "door-open",
+    Desc     = "Auto join and farm Gate Raid until completion, then rejoin",
     Type     = "Checkbox",
     Value    = Options.AutoGateRaid or false,
     Callback = function(v)
@@ -1059,13 +902,9 @@ GamemodeTab:Toggle({
 
         task.spawn(function()
             while isAutoGateRaid and isRunning() do
-
-                while not tryAcquireActivity("GateRaid") and isAutoGateRaid and isRunning() do
-                    task.wait(0.5)
-                end
+                while not tryAcquireActivity("GateRaid") and isAutoGateRaid and isRunning() do task.wait(0.5) end
                 if not isAutoGateRaid or not isRunning() then break end
 
-                -- ── Step 1: walk into the gate to trigger the join ──
                 local gateOk = false
                 local gateTries = 0
                 repeat
@@ -1075,133 +914,53 @@ GamemodeTab:Toggle({
                 until gateOk or gateTries > 10
 
                 if not gateOk then
-                    WindUI:Notify({
-                        Title   = "Auto Gate Raid",
-                        Content = "Active Gate not found — retrying...",
-                        Duration = 4
-                    })
-                    releaseActivity("GateRaid")
-                    task.wait(5)
-                    continue
+                    WindUI:Notify({ Title = "Auto Gate Raid", Content = "Active Gate not found — retrying...", Duration = 4 })
+                    releaseActivity("GateRaid") task.wait(5) continue
                 end
 
-                WindUI:Notify({
-                    Title   = "Auto Gate Raid",
-                    Content = "Entering Gate Raid: World" .. GATE_WORLD .. "...",
-                    Duration = 3
-                })
+                WindUI:Notify({ Title = "Auto Gate Raid", Content = "Joining Gate Raid: World" .. GATE_WORLD .. "...", Duration = 3 })
 
                 local joinWait = 0
-                repeat
-                    task.wait(1)
-                    joinWait = joinWait + 1
-                until isInGateRaid() or joinWait > 20
+                repeat task.wait(1) joinWait = joinWait + 1 until isInGateRaid() or joinWait > 20
 
                 if not isInGateRaid() then
-                    WindUI:Notify({
-                        Title   = "Auto Gate Raid",
-                        Content = "Failed to enter Gate Raid — retrying...",
-                        Duration = 4
-                    })
-                    releaseActivity("GateRaid")
-                    task.wait(5)
-                    continue
+                    WindUI:Notify({ Title = "Auto Gate Raid", Content = "Failed to join Gate Raid — retrying...", Duration = 4 })
+                    releaseActivity("GateRaid") task.wait(5) continue
                 end
 
                 local gateEnemyFolder = nil
                 local waited = 0
                 repeat
-                    task.wait(1)
-                    waited = waited + 1
+                    task.wait(1) waited = waited + 1
                     gateEnemyFolder = getGateRaidEnemyFolder()
                 until (gateEnemyFolder and #gateEnemyFolder:GetChildren() > 0) or waited > 20
 
                 if not gateEnemyFolder or #gateEnemyFolder:GetChildren() == 0 then
-                    WindUI:Notify({
-                        Title   = "Auto Gate Raid",
-                        Content = "Enemy folder not found — leaving & retrying...",
-                        Duration = 4
-                    })
-                    fireLeaveGateRaid()
-                    releaseActivity("GateRaid")
-                    task.wait(5)
-                    continue
+                    WindUI:Notify({ Title = "Auto Gate Raid", Content = "Enemy folder not found — retrying...", Duration = 4 })
+                    releaseActivity("GateRaid") task.wait(5) continue
                 end
 
-                WindUI:Notify({
-                    Title   = "Auto Gate Raid",
-                    Content = string.format("Joined Gate Raid! Will leave at Wave %d", gateRaidLeaveWave),
-                    Duration = 3
-                })
+                WindUI:Notify({ Title = "Auto Gate Raid", Content = "Farming Gate Raid until completion...", Duration = 3 })
 
-                local shouldLeave = false
-
-                while isAutoGateRaid and isRunning() and not shouldLeave do
-
-                    local curWave, maxWave = getGateCurrentWave()
-                    if curWave >= gateRaidLeaveWave then
-                        WindUI:Notify({
-                            Title   = "Auto Gate Raid",
-                            Content = string.format("Wave %d/%d — Leaving now!", curWave, maxWave),
-                            Duration = 4
-                        })
-                        shouldLeave = true
-                        break
-                    end
-
+                while isAutoGateRaid and isRunning() do
                     if not isInGateRaid() then
-                        WindUI:Notify({
-                            Title   = "Auto Gate Raid",
-                            Content = "Left Gate Raid (by server) — rejoining...",
-                            Duration = 4
-                        })
+                        WindUI:Notify({ Title = "Auto Gate Raid", Content = "Gate Raid completed — rejoining...", Duration = 4 })
                         break
                     end
-
                     local target = findNearest(gateEnemyFolder, nil)
-                    if not target then
-                        task.wait(0.3)
-                        continue
-                    end
-
+                    if not target then task.wait(0.3) continue end
                     teleportTo(target)
-
                     while isAutoGateRaid and isRunning() do
                         if isEnemyDead(target) then break end
-
-                        local cw = getGateCurrentWave()
-                        if cw >= gateRaidLeaveWave then
-                            shouldLeave = true
-                            break
-                        end
-
-                        if not isInGateRaid() then
-                            shouldLeave = false
-                            break
-                        end
-
+                        if not isInGateRaid() then break end
                         stayNear(target)
                         task.wait(0.1)
                     end
-
                     task.wait(0.05)
                 end
 
-                if shouldLeave then
-                    fireLeaveGateRaid()
-                    WindUI:Notify({
-                        Title   = "Auto Gate Raid",
-                        Content = "Left Gate Raid — waiting 5s before rejoining...",
-                        Duration = 5
-                    })
-                    task.wait(5)
-                end
-
                 releaseActivity("GateRaid")
-
-                if isAutoGateRaid and isRunning() then
-                    task.wait(3)
-                end
+                if isAutoGateRaid and isRunning() then task.wait(cooldownGateRaid) end
             end
             releaseActivity("GateRaid")
         end)
@@ -1209,31 +968,17 @@ GamemodeTab:Toggle({
 })
 
 -- ============================================================
---  TAB: GAMEMODE — AUTO SLAYER TOWER  (World6, RaidArenas, fixed)
+--  TAB: GAMEMODE — AUTO SLAYER TOWER  (World6)
 -- ============================================================
+GamemodeTab:Divider()
+GamemodeTab:Section({ Title = "Slayer Tower (World6)" })
 
-local SLAYER_WORLD        = "World6"
-local slayerRaidLeaveWave = Options.SlayerRaidLeaveWave or 100
+local SLAYER_WORLD = "World6"
 
 local function fireJoinSlayer()
     pcall(function()
-        local remote = RS:WaitForChild("BridgeNet2", 10)
-                          :WaitForChild("dataRemoteEvent", 10)
-        remote:FireServer({
-            {
-                __BridgeTuplePayload__ = true,
-                Payload = { "Create", SLAYER_WORLD, n = 2 }
-            },
-            "\149"
-        })
-    end)
-end
-
-local function fireLeaveSlayer()
-    pcall(function()
-        local remote = RS:WaitForChild("BridgeNet2", 10)
-                          :WaitForChild("dataRemoteEvent", 10)
-        remote:FireServer({ { [2] = "\151" } })
+        local remote = RS:WaitForChild("BridgeNet2", 10):WaitForChild("dataRemoteEvent", 10)
+        remote:FireServer({ { __BridgeTuplePayload__ = true, Payload = { "Create", SLAYER_WORLD, n = 2 } }, "\149" })
     end)
 end
 
@@ -1245,18 +990,6 @@ local function getSlayerEnemyFolder()
     return wf:FindFirstChild("Enemies")
 end
 
--- Same RaidGui.Main.Wave pattern as World1 / Gate Raid
-local function getSlayerCurrentWave()
-    local waveLabel = nil
-    pcall(function()
-        local raidGui = player.PlayerGui:FindFirstChild("RaidGui")
-        waveLabel = raidGui
-            and raidGui:FindFirstChild("Main")
-            and raidGui.Main:FindFirstChild("Wave")
-    end)
-    return readWaveFromLabel(waveLabel)
-end
-
 local function isInSlayer()
     local ok, result = pcall(function()
         local gui = player.PlayerGui:FindFirstChild("RaidGui")
@@ -1265,10 +998,23 @@ local function isInSlayer()
     return ok and result
 end
 
+GamemodeTab:Slider({
+    Title    = "Rejoin Cooldown",
+    Icon     = "clock",
+    Desc     = "Time to wait before rejoining Slayer Tower",
+    Value    = { Min = 1, Max = 600, Default = cooldownSlayer },
+    Rounding = 0,
+    Callback = function(v)
+        cooldownSlayer = v
+        Options.CooldownSlayer = v
+        SaveConfig()
+    end
+})
 
 GamemodeTab:Toggle({
     Title    = "Auto Slayer Tower (World6)",
     Icon     = "sword",
+    Desc     = "Auto join and farm Slayer Tower until completion, then rejoin",
     Type     = "Checkbox",
     Value    = Options.AutoSlayerRaid or false,
     Callback = function(v)
@@ -1279,130 +1025,53 @@ GamemodeTab:Toggle({
 
         task.spawn(function()
             while isAutoSlayer and isRunning() do
-
-                while not tryAcquireActivity("Slayer") and isAutoSlayer and isRunning() do
-                    task.wait(0.5)
-                end
+                while not tryAcquireActivity("Slayer") and isAutoSlayer and isRunning() do task.wait(0.5) end
                 if not isAutoSlayer or not isRunning() then break end
 
                 fireJoinSlayer()
-                WindUI:Notify({
-                    Title   = "Auto Slayer Tower",
-                    Content = "Joining Slayer Tower: " .. SLAYER_WORLD .. "...",
-                    Duration = 3
-                })
+                WindUI:Notify({ Title = "Auto Slayer Tower", Content = "Joining Slayer Tower: " .. SLAYER_WORLD .. "...", Duration = 3 })
 
                 local joinWait = 0
-                repeat
-                    task.wait(1)
-                    joinWait = joinWait + 1
-                until isInSlayer() or joinWait > 20
+                repeat task.wait(1) joinWait = joinWait + 1 until isInSlayer() or joinWait > 20
 
                 if not isInSlayer() then
-                    WindUI:Notify({
-                        Title   = "Auto Slayer Tower",
-                        Content = "Failed to join Slayer Tower — retrying...",
-                        Duration = 4
-                    })
-                    releaseActivity("Slayer")
-                    task.wait(5)
-                    continue
+                    WindUI:Notify({ Title = "Auto Slayer Tower", Content = "Failed to join Slayer Tower — retrying...", Duration = 4 })
+                    releaseActivity("Slayer") task.wait(5) continue
                 end
 
                 local slayerEnemyFolder = nil
                 local waited = 0
                 repeat
-                    task.wait(1)
-                    waited = waited + 1
+                    task.wait(1) waited = waited + 1
                     slayerEnemyFolder = getSlayerEnemyFolder()
                 until (slayerEnemyFolder and #slayerEnemyFolder:GetChildren() > 0) or waited > 20
 
                 if not slayerEnemyFolder or #slayerEnemyFolder:GetChildren() == 0 then
-                    WindUI:Notify({
-                        Title   = "Auto Slayer Tower",
-                        Content = "Enemy folder not found — leaving & retrying...",
-                        Duration = 4
-                    })
-                    fireLeaveSlayer()
-                    releaseActivity("Slayer")
-                    task.wait(5)
-                    continue
+                    WindUI:Notify({ Title = "Auto Slayer Tower", Content = "Enemy folder not found — retrying...", Duration = 4 })
+                    releaseActivity("Slayer") task.wait(5) continue
                 end
 
-                WindUI:Notify({
-                    Title   = "Auto Slayer Tower",
-                    Content = string.format("Joined Slayer Tower! Will leave at Wave %d", slayerRaidLeaveWave),
-                    Duration = 3
-                })
+                WindUI:Notify({ Title = "Auto Slayer Tower", Content = "Farming Slayer Tower until completion...", Duration = 3 })
 
-                local shouldLeave = false
-
-                while isAutoSlayer and isRunning() and not shouldLeave do
-
-                    local curWave, maxWave = getSlayerCurrentWave()
-                    if curWave >= slayerRaidLeaveWave then
-                        WindUI:Notify({
-                            Title   = "Auto Slayer Tower",
-                            Content = string.format("Wave %d/%d — Leaving now!", curWave, maxWave),
-                            Duration = 4
-                        })
-                        shouldLeave = true
-                        break
-                    end
-
+                while isAutoSlayer and isRunning() do
                     if not isInSlayer() then
-                        WindUI:Notify({
-                            Title   = "Auto Slayer Tower",
-                            Content = "Left Slayer Tower (by server) — rejoining...",
-                            Duration = 4
-                        })
+                        WindUI:Notify({ Title = "Auto Slayer Tower", Content = "Slayer Tower completed — rejoining...", Duration = 4 })
                         break
                     end
-
                     local target = findNearest(slayerEnemyFolder, nil)
-                    if not target then
-                        task.wait(0.3)
-                        continue
-                    end
-
+                    if not target then task.wait(0.3) continue end
                     teleportTo(target)
-
                     while isAutoSlayer and isRunning() do
                         if isEnemyDead(target) then break end
-
-                        local cw = getSlayerCurrentWave()
-                        if cw >= slayerRaidLeaveWave then
-                            shouldLeave = true
-                            break
-                        end
-
-                        if not isInSlayer() then
-                            shouldLeave = false
-                            break
-                        end
-
+                        if not isInSlayer() then break end
                         stayNear(target)
                         task.wait(0.1)
                     end
-
                     task.wait(0.05)
                 end
 
-                if shouldLeave then
-                    fireLeaveSlayer()
-                    WindUI:Notify({
-                        Title   = "Auto Slayer Tower",
-                        Content = "Left Slayer Tower — waiting 5s before rejoining...",
-                        Duration = 5
-                    })
-                    task.wait(5)
-                end
-
                 releaseActivity("Slayer")
-
-                if isAutoSlayer and isRunning() then
-                    task.wait(3)
-                end
+                if isAutoSlayer and isRunning() then task.wait(cooldownSlayer) end
             end
             releaseActivity("Slayer")
         end)
@@ -1417,6 +1086,7 @@ MiscTab:Section({ Title = "Rewards" })
 MiscTab:Toggle({
     Title    = "Auto Claim Daily Reward",
     Icon     = "calendar",
+    Desc     = "Automatically claims all 7 daily rewards every minute",
     Type     = "Checkbox",
     Value    = Options.AutoDailyReward or false,
     Callback = function(v)
@@ -1462,20 +1132,14 @@ MiscTab:Slider({
     end
 })
 
--- Re-apply WalkSpeed whenever character (re)spawns
 player.CharacterAdded:Connect(function(char)
     if not isRunning() then return end
     local hum = char:WaitForChild("Humanoid", 10)
-    if hum then
-        task.wait(0.2)
-        hum.WalkSpeed = savedWalkSpeed
-    end
+    if hum then task.wait(0.2) hum.WalkSpeed = savedWalkSpeed end
 end)
 
 task.defer(function()
-    if player.Character then
-        applyWalkSpeed(savedWalkSpeed)
-    end
+    if player.Character then applyWalkSpeed(savedWalkSpeed) end
 end)
 
 MiscTab:Divider()
@@ -1484,7 +1148,7 @@ MiscTab:Section({ Title = "Performance" })
 MiscTab:Toggle({
     Title    = "Wipe VFX (Anti-Lag)",
     Icon     = "eye-off",
-    Desc     = "Disables particles, trails, beams, etc.",
+    Desc     = "Disables particles, trails, beams and other effects to reduce lag",
     Type     = "Checkbox",
     Value    = Options.WipeVFX or false,
     Callback = function(v)
@@ -1527,6 +1191,7 @@ SettingTab:Keybind({
 SettingTab:Toggle({
     Title    = "Anti AFK",
     Icon     = "shield",
+    Desc     = "Prevents being kicked for being idle",
     Type     = "Checkbox",
     Value    = Options.AntiAFK or false,
     Callback = function(v) Options.AntiAFK = v SaveConfig() end
@@ -1535,7 +1200,7 @@ SettingTab:Toggle({
 SettingTab:Toggle({
     Title    = "Auto Rejoin",
     Icon     = "plug",
-    Desc     = "Reconnect automatically on disconnect",
+    Desc     = "Automatically reconnects when disconnected from the server",
     Type     = "Checkbox",
     Value    = Options.AutoRejoin or false,
     Callback = function(v)
@@ -1602,11 +1267,13 @@ ToggleBtn.Image                  = "rbxassetid://110552700896064"
 ToggleBtn.AnchorPoint            = Vector2.new(0.5, 0.5)
 
 local UICorner2 = Instance.new("UICorner")
-UICorner2.CornerRadius = UDim.new(1, 0) UICorner2.Parent = ToggleBtn
+UICorner2.CornerRadius = UDim.new(1, 0)
+UICorner2.Parent = ToggleBtn
 
 local UIStroke2 = Instance.new("UIStroke")
-UIStroke2.Parent = ToggleBtn UIStroke2.Thickness = 2
-UIStroke2.Color  = Color3.fromRGB(124, 58, 237)
+UIStroke2.Parent          = ToggleBtn
+UIStroke2.Thickness       = 2
+UIStroke2.Color           = Color3.fromRGB(124, 58, 237)
 UIStroke2.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
 
 local dragging, dragStart, startPos
@@ -1645,4 +1312,4 @@ UserInputService.InputChanged:Connect(function(input)
     end
 end)
 
-FarmTab:Select()    
+FarmTab:Select()
